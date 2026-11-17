@@ -23,6 +23,7 @@
     { id: 'beds', label: 'Beds per shelter', min: 5, max: 150, val: 40 },
     { id: 'radius', label: 'Evacuation radius', min: 5, max: 60, val: 25 },
     { id: 'fireEvery', label: 'Fire spread (ticks)', min: 2, max: 20, val: 6 },
+    { id: 'fireRadius', label: 'Fire size (max radius)', min: 2, max: 40, val: 12 },
     { id: 'seed', label: 'Population seed', min: 1, max: 99, val: 1 },
   ];
   const WEIGHTS = [{ id: 'female', label: 'Women (bonus)', min: 0, max: 50, val: 0 }, { id: 'aging', label: 'Aging per tick', min: 0, max: 5, val: 1 }];
@@ -62,7 +63,7 @@
   function params(priority) {
     const v = S.vals;
     return { people: v.people, ambulances: v.ambulances, medics: v.medics, beds: v.beds, radius: v.radius,
-      fireEvery: v.fireEvery, seed: v.seed, priority, base: K.map((k, i) => BASES[S.order.indexOf(i)]), female: v.female, aging: v.aging };
+      fireEvery: v.fireEvery, fireRadius: v.fireRadius, seed: v.seed, priority, base: K.map((k, i) => BASES[S.order.indexOf(i)]), female: v.female, aging: v.aging };
   }
 
   function resetTerrain() {

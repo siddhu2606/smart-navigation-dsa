@@ -59,6 +59,7 @@ void simDemo() {
         p.people = 400;
         p.ambulances = 2;
         p.alertRadius = 30;
+        p.bedsPerShelter = 100;
         p.usePriority = usePriority;
         Simulation sim(c.terrain, c.cost, c.W, c.H, c.doors, c.shelters, c.depot, c.fireCell, p);
         sim.runToEnd();

@@ -36,12 +36,12 @@
     },
 
     // ---- disaster simulation
-    // p: {people, ambulances, medics, beds, radius, fireEvery, seed, priority(bool), base[7], female, aging}
+    // p: {people, ambulances, medics, beds, radius, fireEvery, seed, priority(bool), base[4], female, aging, fireRadius}
     simInit(map, cost, doors, shelters, depot, fireCell, p) {
       const tp = put(Uint8Array.from(map.terrain)), cp = put(cost);
       const dp = put(Int32Array.from(doors)), sp = put(Int32Array.from(shelters));
       const params = [p.people, p.ambulances, p.medics, p.beds, p.radius, p.fireEvery, p.seed, p.priority ? 1 : 0,
-        ...p.base, p.female, p.aging];
+        ...p.base, p.female, p.aging, p.fireRadius];
       const pp = put(Int32Array.from(params));
       M._sn_sim_init(tp, cp, map.W, map.H, dp, doors.length, sp, shelters.length, depot, fireCell, pp);
       for (const ptr of [tp, cp, dp, sp, pp]) M._free(ptr);

@@ -58,6 +58,7 @@ Simulation::Simulation(const vector<int>& terr, const vector<int>& cost, int w, 
         ambulances.push_back(a);
     }
 
+    fireOrigin = fireCell;
     ignite(fireCell);                    // the fire starts in ONE building
 }
 
@@ -79,6 +80,12 @@ int Simulation::makeKey(const Person& p) const {
     int key = params.basePriority[p.kind] - params.aging * p.alertTick;
     if (p.female) key += params.femaleBonus;
     return key;
+}
+
+// The fire is one building's fire, not a city-wide one: it stays within fireRadius cells of where it started.
+bool Simulation::inFireRange(int cell) const {
+    int dx = cell % W - fireOrigin % W, dy = cell / W - fireOrigin / W;
+    return dx * dx + dy * dy <= params.fireRadius * params.fireRadius;
 }
 
 void Simulation::ignite(int cell) {
@@ -113,14 +120,14 @@ void Simulation::spreadFire() {
             int nx = x + dx[d], ny = y + dy[d];
             if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
             int v = ny * W + nx;
-            int chance = burning[v] ? 0 : spreadChance(terrain[v]);
+            int chance = (burning[v] || !inFireRange(v)) ? 0 : spreadChance(terrain[v]);
             if (chance == 0) continue;
             more = true;
             if ((int)(rng() % 100) < chance) born.push_back(v);
         }
         if (rng() % 100 < 3) {           // a flying ember lands up to 4 cells away (lets fire cross a road)
             int ex = x + (int)(rng() % 9) - 4, ey = y + (int)(rng() % 9) - 4;
-            if (ex >= 0 && ey >= 0 && ex < W && ey < H && !burning[ey * W + ex] && spreadChance(terrain[ey * W + ex]) > 0)
+            if (ex >= 0 && ey >= 0 && ex < W && ey < H && !burning[ey * W + ex] && inFireRange(ey * W + ex) && spreadChance(terrain[ey * W + ex]) > 0)
                 born.push_back(ey * W + ex);
         }
         if (more) keep.push_back(c);

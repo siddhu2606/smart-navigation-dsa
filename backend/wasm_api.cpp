@@ -69,7 +69,7 @@ static void snapshot() {
 }
 
 // params: people, ambulances, medics, bedsPerShelter, alertRadius, fireEvery, seed, usePriority,
-//         4 base priorities (ADULT, DEPENDENT, DISABLED, INJURED), femaleBonus, aging
+//         4 base priorities (ADULT, DEPENDENT, DISABLED, INJURED), femaleBonus, aging, fireRadius
 API int sn_sim_init(const unsigned char* terrain, const unsigned char* cost, int W, int H,
                     const int* doors, int nDoors, const int* shelters, int nShelters,
                     int depot, int fireCell, const int* params) {
@@ -86,6 +86,7 @@ API int sn_sim_init(const unsigned char* terrain, const unsigned char* cost, int
     for (int k = 0; k < KIND_COUNT; k++) p.basePriority[k] = params[8 + k];
     p.femaleBonus = params[8 + KIND_COUNT];
     p.aging = params[9 + KIND_COUNT];
+    p.fireRadius = params[10 + KIND_COUNT];
     sim = new Simulation(vector<int>(terrain, terrain + W * H), vector<int>(cost, cost + W * H), W, H,
                          vector<int>(doors, doors + nDoors), vector<int>(shelters, shelters + nShelters),
                          depot, fireCell, p);

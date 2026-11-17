@@ -27,6 +27,7 @@ struct SimParams {
     int bedsPerShelter = 40;
     int alertRadius = 25;                  // people within this many cells of a fire are told to leave
     int fireEvery = 6;                     // the fire tries to spread once every this many ticks
+    int fireRadius = 14;                   // the fire never spreads further than this many cells from where it started
     int seed = 1;
     bool usePriority = true;               // false = first come, first served
     int basePriority[KIND_COUNT] = {10, 40, 70, 100};   // by Kind (the page lets you drag the groups into order)
@@ -117,6 +118,8 @@ private:
     priority_queue<Entry> treatQ;          // in the shelter, waiting for a medic
     vector<int> inTreatment;
 
+    int fireOrigin = 0;
+    bool inFireRange(int cell) const;
     int makeKey(const Person& p) const;
     void ignite(int cell);
     void spreadFire();

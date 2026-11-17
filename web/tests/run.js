@@ -38,7 +38,7 @@ const ok = (cond, msg) => { checks++; if (!cond) { failed++; console.log('FAIL: 
     const sites = SN.mapgen.pickSites(map, seed, 3);
     const houses = map.buildings.slice(1).filter((b) => b.kind === 'house' && b.door).map((b) => b.door);
     const fire = (sites.fire.y + (sites.fire.h >> 1)) * size + sites.fire.x + (sites.fire.w >> 1);
-    const p = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: size <= 100 ? 10 : 25, fireEvery: 6, seed: 1, priority: true,
+    const p = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: size <= 100 ? 10 : 25, fireEvery: 6, fireRadius: 12, seed: 1, priority: true,
       base: [10, 40, 70, 100], female: 0, aging: 1 };
     const results = [];
     for (const priority of [true, false]) {
@@ -71,7 +71,7 @@ const ok = (cond, msg) => { checks++; if (!cond) { failed++; console.log('FAIL: 
   }
   const ps = SN.stage.pickPuneSites(pune, 'x', 3);
   ok(ps.hospital && ps.shelters.length === 3 && ps.fire, 'Pune: sites picked');
-  const pp = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, seed: 1, priority: true, base: [10, 40, 70, 100], female: 0, aging: 1 };
+  const pp = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, fireRadius: 12, seed: 1, priority: true, base: [10, 40, 70, 100], female: 0, aging: 1 };
   engine.simInit(pune, pcost, pdoors.filter((d) => d), ps.shelters.map((b) => b.door), ps.hospital.door, ps.fire.cell, pp);
   engine.simRun();
   const pm = engine.simMetrics();
