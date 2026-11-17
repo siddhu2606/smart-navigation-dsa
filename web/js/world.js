@@ -16,9 +16,11 @@
       this.map = map; this.W = map.W; this.H = map.H;
       this.phys = imageCanvas(this.W, this.H);
       this.logic = imageCanvas(this.W, this.H);
+      this.over = imageCanvas(this.W, this.H);        // real-map mode: only fire and walls, drawn above Leaflet
       for (let i = 0; i < this.W * this.H; i++) this.paint(i);
       this.phys.ctx.putImageData(this.phys.img, 0, 0);
       this.logic.ctx.putImageData(this.logic.img, 0, 0);
+      this.over.ctx.putImageData(this.over.img, 0, 0);
     }
 
     physColor(i) {
@@ -36,6 +38,9 @@
       const cost = SN.COST[this.map.terrain[i]], l = this.logic.img.data;
       const g = cost ? 246 - Math.min(8, cost - 1) * 17 : 0;
       l[k] = cost ? g : 46; l[k + 1] = cost ? g : 52; l[k + 2] = cost ? g + 4 : 66; l[k + 3] = 255;
+      const t = this.map.terrain[i], o = this.over.img.data;      // overlay: orange fire, dark red wall, else clear
+      const c2 = t === T.FIRE ? [255, 110, 20, 235] : t === T.DEBRIS ? [150, 30, 30, 235] : [0, 0, 0, 0];
+      o[k] = c2[0]; o[k + 1] = c2[1]; o[k + 2] = c2[2]; o[k + 3] = c2[3];
     }
 
     // repaint every cell (after the whole map changed back, e.g. a reset)
@@ -53,7 +58,7 @@
         const x = i % this.W, y = (i / this.W) | 0;
         x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
       }
-      for (const w of [this.phys, this.logic]) w.ctx.putImageData(w.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+      for (const w of [this.phys, this.logic, this.over]) w.ctx.putImageData(w.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
     }
   }
 

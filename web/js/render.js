@@ -5,7 +5,20 @@
   'use strict';
   const TILE_MIN = 9;   // device pixels per cell from which the tile art is used
 
+  // The mapping from cells to canvas pixels: s device pixels per cell, (ox, oy) = where cell (0,0) starts.
+  function makeView(cw, ch, W, H, s, ox, oy) {
+    return { s, ox, oy, cw, ch, W, H,
+      x0: Math.max(0, Math.floor(-ox / s)), y0: Math.max(0, Math.floor(-oy / s)),
+      x1: Math.min(W - 1, Math.ceil((cw - ox) / s)), y1: Math.min(H - 1, Math.ceil((ch - oy) / s)) };
+  }
+
   function drawBase(ctx, v, world, mode, now) {
+    if (world.map.real && mode === 'physical') {      // Leaflet draws the map; we only add fire and walls on top
+      ctx.clearRect(0, 0, v.cw, v.ch);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(world.over.canvas, v.ox, v.oy, v.W * v.s, v.H * v.s);
+      return;
+    }
     ctx.fillStyle = '#0e1a14';
     ctx.fillRect(0, 0, v.cw, v.ch);
     ctx.imageSmoothingEnabled = false;
@@ -45,7 +58,7 @@
 
   // A round flag with a letter on a cell.
   function drawFlag(ctx, v, cell, color, text) {
-    const [x, y] = cellCenter(v, cell), r = Math.max(8, v.s * 0.6);
+    const [x, y] = cellCenter(v, cell), r = Math.max(10, v.s * 0.6);
     ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -80,5 +93,5 @@
     return x < 0 || y < 0 || x >= v.W || y >= v.H ? -1 : y * v.W + x;
   }
 
-  SN.render = { drawBase, drawPath, drawFlag, drawHead, cellCenter, fitCanvas, cellAt, TILE_MIN };
+  SN.render = { makeView, drawBase, drawPath, drawFlag, drawHead, cellCenter, fitCanvas, cellAt, TILE_MIN };
 })(globalThis.SN = globalThis.SN || {});

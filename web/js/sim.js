@@ -7,7 +7,7 @@
   const TPS = 20;   // ticks per second at 1x
 
   const S = {
-    size: 100, seed: '', map: null, world: null, cam: new SN.Camera(), mode: 'physical',
+    size: 100, seed: '', map: null, world: null, surf: null, mode: 'physical',
     sites: null, fireCell: 0, doors: [], shelterCells: [], depot: 0, cost: null,
     phase: 'ready',                       // ready | running | paused | done
     speed: 2, acc: 0, fireApplied: false,
@@ -31,19 +31,27 @@
   // ------------------------------------------------------------------ building the scenario
   function newMap(keepSeed) {
     if (!keepSeed) S.seed = 'sim' + Math.floor(Math.random() * 1e6);
-    S.map = SN.mapgen.generate(S.size, S.size, S.seed);
+    if (SN.stage.real) {
+      const p = SN.stage.pune;
+      S.map = Object.assign({}, p, { terrain: p.base.slice() });     // a fresh copy: fire changes it
+      S.sites = SN.stage.pickPuneSites(S.map, S.seed, 3);
+    } else {
+      S.map = SN.mapgen.generate(S.size, S.size, S.seed);
+    }
+    S.size = S.map.W;
     S.world = new SN.World(S.map);
-    S.cam.fit(S.size, S.size);
-    S.sites = SN.mapgen.pickSites(S.map, S.seed, 3);
+    S.surf.attach(S.map);
+    bindLeaflet();
+    if (!SN.stage.real) S.sites = SN.mapgen.pickSites(S.map, S.seed, 3);
     S.world.repaintAll();                                       // building colours changed (hospital, shelters)
     S.depot = S.sites.hospital.door;
     S.shelterCells = S.sites.shelters.map((b) => b.door);
-    S.doors = S.map.buildings.slice(1).filter((b) => b.door && b.kind === 'house').map((b) => b.door);
+    S.doors = S.map.buildings.slice(1).filter((b) => b.door >= 0 && b.door && b.kind === 'house').map((b) => b.door);
     S.cost = SN.mapgen.costArray(S.map.terrain);
     setFireBuilding(S.sites.fire);
   }
 
-  function centreCell(b) { return (b.y + (b.h >> 1)) * S.map.W + b.x + (b.w >> 1); }
+  function centreCell(b) { return b.cell >= 0 && b.cell !== undefined ? b.cell : (b.y + (b.h >> 1)) * S.map.W + b.x + (b.w >> 1); }
 
   function setFireBuilding(b) {
     S.fireBuilding = b;
@@ -150,6 +158,13 @@
     rebuild();
   }
 
+  function sizeOptions() {
+    const sel = $('sim-size');
+    if (SN.stage.real) { sel.innerHTML = `<option>Pune · ${SN.stage.pune.W} × ${SN.stage.pune.H}</option>`; sel.disabled = true; }
+    else { if (![100, 150, 200].includes(S.size)) S.size = 100;
+      sel.innerHTML = [100, 150, 200].map((n) => `<option value="${n}">${n} × ${n}</option>`).join(''); sel.value = String(S.size); sel.disabled = false; }
+  }
+
   const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
 
   function updatePanel() {
@@ -240,8 +255,8 @@
       ctx.drawImage(sheet[dir][frame], Math.round(px - size / 2), Math.round(py - size * 0.85), size, size);
       if (s === ST.WAITING_RIDE) ctx.drawImage(SN.sprites.bubble('!'), px - v.s * 0.45, py - v.s * 2.1, v.s * 0.9, v.s * 0.9);
     } else {
-      const r = Math.max(2, v.s * (s === ST.UNAWARE ? 0.32 : 0.5));
-      ctx.fillStyle = s === ST.UNAWARE ? 'rgba(255,255,255,.55)' : kind.color;
+      const r = Math.max(S.map.real ? 3.5 : 2, v.s * (s === ST.UNAWARE ? 0.32 : 0.5));
+      ctx.fillStyle = s === ST.UNAWARE ? (S.map.real ? 'rgba(40,40,60,.75)' : 'rgba(255,255,255,.55)') : kind.color;
       ctx.strokeStyle = s === ST.WAITING_RIDE ? '#fff' : '#101820';
       ctx.lineWidth = s === ST.WAITING_RIDE ? 2 : 1;
       ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -262,9 +277,9 @@
   }
 
   function drawScene(now) {
-    const cv = $('sim-map');
-    if (!R.fitCanvas(cv)) return;
-    const ctx = cv.getContext('2d'), v = S.cam.view(cv.width, cv.height);
+    const cv = $('sim-map'), v = S.surf.view();
+    if (!v) return;
+    const ctx = cv.getContext('2d');
     R.drawBase(ctx, v, S.world, S.mode, now);
 
     // evacuation zone around the fire
@@ -283,36 +298,48 @@
 
   // ------------------------------------------------------------------ input
   function bindMap() {
-    const cv = $('sim-map');
+    const cv = $('sim-map'), cam = () => S.surf.cam;
     let drag = null;
     cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
     cv.addEventListener('pointermove', (e) => {
-      const v = S.cam.view(cv.width, cv.height), dpr = cv.width / cv.getBoundingClientRect().width;
+      const v = S.surf.view(), dpr = cv.width / cv.getBoundingClientRect().width;
+      if (!v) return;
       if (drag) {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         drag.moved += Math.abs(dx) + Math.abs(dy);
-        if (drag.moved > 4) S.cam.panBy(dx * dpr, dy * dpr, v.s);
+        if (drag.moved > 4) cam().panBy(dx * dpr, dy * dpr, v.s);
         drag.x = e.clientX; drag.y = e.clientY;
       }
-      hover(e, v);
+      hover(R.cellAt(cv, v, e));
     });
     cv.addEventListener('pointerup', (e) => {
-      if (drag && drag.moved <= 4) clickCell(R.cellAt(cv, S.cam.view(cv.width, cv.height), e));
+      const v = S.surf.view();
+      if (drag && drag.moved <= 4 && v) clickCell(R.cellAt(cv, v, e));
       drag = null;
     });
     cv.addEventListener('pointerleave', () => { $('sim-hover').textContent = ''; });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
       const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
-      S.cam.zoomAt(cv.width, cv.height, (e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr, e.deltaY < 0 ? 1.25 : 0.8);
+      cam().zoomAt(cv.width, cv.height, (e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr, e.deltaY < 0 ? 1.25 : 0.8);
     }, { passive: false });
-    $('sim-zoom-in').addEventListener('click', () => S.cam.zoomBy(1.4, cv.width, cv.height));
-    $('sim-zoom-out').addEventListener('click', () => S.cam.zoomBy(0.7, cv.width, cv.height));
-    $('sim-fit').addEventListener('click', () => S.cam.fit(S.size, S.size));
+    $('sim-zoom-in').addEventListener('click', () => cam().zoomBy(1.4, cv.width, cv.height));
+    $('sim-zoom-out').addEventListener('click', () => cam().zoomBy(0.7, cv.width, cv.height));
+    $('sim-fit').addEventListener('click', () => cam().fit(S.size, S.size));
   }
 
-  function hover(e, v) {
-    const cv = $('sim-map'), cell = R.cellAt(cv, v, e), el = $('sim-hover');
+  // real-map mode: Leaflet owns the mouse
+  function bindLeaflet() {
+    const lf = S.surf.lf;
+    if (!lf || lf._simBound) return;
+    lf._simBound = true;
+    const cellOf = (e) => { const v = S.surf.view(); return v ? S.surf.cellFromContainerPoint(e.containerPoint, v) : -1; };
+    lf.on('mousemove', (e) => hover(cellOf(e)));
+    lf.on('click', (e) => clickCell(cellOf(e)));
+  }
+
+  function hover(cell) {
+    const el = $('sim-hover');
     if (cell < 0) { el.textContent = ''; return; }
     let text = `x ${cell % S.size}, y ${(cell / S.size) | 0} · ${SN.TERRAIN_NAMES[S.map.terrain[cell]]}`;
     const W = S.size, mx = cell % W, my = (cell / W) | 0;
@@ -369,7 +396,19 @@
     open() {
       if (started) return;
       started = true;
+      S.surf = new SN.stage.Surface($('sim-map'), $('sim-lf'), true);
       buildControls(); bindMap(); bindPanel();
+      newMap();
+      sizeOptions();
+    },
+    // the mode switch (pixel town <-> real map) changed
+    onMode() {
+      if (!started) return;
+      S.phase = 'ready';
+      $('sim-play').textContent = '▶ Start';
+      S.surf.destroyLeaflet();
+      sizeOptions();
+      if (!SN.stage.real) S.size = +$('sim-size').value;
       newMap();
     },
     frame(now) {

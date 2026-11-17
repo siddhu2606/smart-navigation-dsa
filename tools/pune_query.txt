@@ -1,0 +1,11 @@
+[out:json][timeout:180];
+(
+  way["highway"](18.5095,73.83805,18.5285,73.85795);
+  way["building"](18.5095,73.83805,18.5285,73.85795);
+  way["natural"="water"](18.5095,73.83805,18.5285,73.85795);
+  way["waterway"~"riverbank|river|canal"](18.5095,73.83805,18.5285,73.85795);
+  relation["natural"="water"](18.5095,73.83805,18.5285,73.85795);
+  relation["waterway"="riverbank"](18.5095,73.83805,18.5285,73.85795);
+  nwr["amenity"~"hospital|clinic|school|college|community_centre|townhall|place_of_worship"](18.5095,73.83805,18.5285,73.85795);
+);
+out geom;

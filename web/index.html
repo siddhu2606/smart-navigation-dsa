@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -17,6 +18,12 @@
     <button class="tab" data-tab="sim">Disaster Sim</button>
   </nav>
   <div class="pill" id="engine-pill">loading C++ engine…</div>
+  <label class="switch" id="mode-label" data-real="false" title="Switch between the pixel-art town and a real map of Pune (Leaflet)">
+    <span class="l town">🎮 Town</span>
+    <input type="checkbox" id="mode-switch">
+    <span class="track"><i></i></span>
+    <span class="l real">🗺 Real map</span>
+  </label>
 </header>
 
 <div id="boot" class="boot">Loading the C++ engine (WebAssembly)…</div>
@@ -24,7 +31,7 @@
 <!-- ===================================================== PATH FINDER ===================================================== -->
 <main id="tab-path" class="page" hidden>
   <section id="pf-setup" class="split">
-    <div class="map-box"><canvas id="pf-map"></canvas><div class="hover" id="pf-hover"></div></div>
+    <div class="map-box"><div class="lf" id="pf-lf" hidden></div><canvas id="pf-map"></canvas><div class="hover" id="pf-hover"></div></div>
     <aside class="side box">
       <h2>1 · Map</h2>
       <div class="row">
@@ -65,7 +72,7 @@
 <!-- ===================================================== DISASTER SIM ===================================================== -->
 <main id="tab-sim" class="page" hidden>
   <section class="split">
-    <div class="map-box"><canvas id="sim-map"></canvas>
+    <div class="map-box"><div class="lf" id="sim-lf" hidden></div><canvas id="sim-map"></canvas>
       <div class="map-tools">
         <button id="sim-zoom-in">+</button><button id="sim-zoom-out">−</button><button id="sim-fit">⤢</button>
       </div>
@@ -103,6 +110,7 @@
   </section>
 </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="engine/engine.js"></script>
 <script src="js/config.js"></script>
 <script src="js/rng.js"></script>
@@ -111,6 +119,7 @@
 <script src="js/world.js"></script>
 <script src="js/camera.js"></script>
 <script src="js/render.js"></script>
+<script src="js/stage.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/pathfinder.js"></script>
 <script src="js/sim.js"></script>

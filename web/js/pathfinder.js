@@ -9,16 +9,23 @@
 
   const PF = {
     size: 100, seed: '', map: null, world: null, cost: null, start: 0, goal: 0,
-    tool: 'start', brush: 2, mode: 'physical', cam: new SN.Camera(),
+    tool: 'start', brush: 2, mode: 'physical', setup: null,
     painting: false, race: null,
   };
 
   // ------------------------------------------------------------------ map and endpoints
   function newMap() {
     PF.seed = 'pf' + Math.floor(Math.random() * 1e6);
-    PF.map = SN.mapgen.generate(PF.size, PF.size, PF.seed);
+    if (SN.stage.real) {
+      const p = SN.stage.pune;
+      PF.map = Object.assign({}, p, { terrain: p.base.slice() });     // a fresh copy: walls change it
+    } else {
+      PF.map = SN.mapgen.generate(PF.size, PF.size, PF.seed);
+    }
+    PF.size = PF.map.W;
     PF.world = new SN.World(PF.map);
-    PF.cam.fit(PF.size, PF.size);
+    PF.setup.attach(PF.map);
+    bindLeaflet();
     PF.cost = SN.mapgen.costArray(PF.map.terrain);
     pickEndpoints();
     check();
@@ -27,7 +34,7 @@
   // Start and goal on two doors far apart that the engine can connect.
   function pickEndpoints() {
     const rng = new SN.RNG(PF.seed + '|ends'), W = PF.size;
-    const doors = PF.map.buildings.slice(1).filter((b) => b.door).map((b) => b.door);
+    const doors = PF.map.buildings.slice(1).filter((b) => b.door >= 0 && b.door).map((b) => b.door);
     for (let tries = 0; tries < 60; tries++) {
       const a = doors[rng.int(doors.length)], b = doors[rng.int(doors.length)];
       const d = Math.abs(a % W - b % W) + Math.abs(((a / W) | 0) - ((b / W) | 0));
@@ -83,7 +90,7 @@
 
   function bindSetup() {
     const cv = $('pf-map');
-    const view = () => PF.cam.view(cv.width, cv.height);
+    const view = () => PF.setup.view() || PF.setup.cam.view(cv.width, cv.height);
     cv.addEventListener('pointerdown', (e) => {
       cv.setPointerCapture(e.pointerId);
       PF.painting = true;
@@ -104,6 +111,7 @@
       if (!b) return;
       PF.tool = b.dataset.tool;
       document.querySelectorAll('#pf-tools .tool').forEach((x) => x.classList.toggle('active', x === b));
+      syncLeafletTool();
     });
     $('pf-brush').addEventListener('input', (e) => { PF.brush = +e.target.value; $('pf-brush-v').textContent = e.target.value; });
     $('pf-size').addEventListener('change', (e) => { PF.size = +e.target.value; newMap(); });
@@ -118,12 +126,37 @@
   }
 
   function drawSetup(now) {
-    const cv = $('pf-map');
-    if (!R.fitCanvas(cv)) return;
-    const ctx = cv.getContext('2d'), v = PF.cam.view(cv.width, cv.height);
+    const cv = $('pf-map'), v = PF.setup.view();
+    if (!v) return;
+    const ctx = cv.getContext('2d');
     R.drawBase(ctx, v, PF.world, PF.mode, now);
     R.drawFlag(ctx, v, PF.start, '#e04838', 'S');
     R.drawFlag(ctx, v, PF.goal, '#48b060', 'G');
+  }
+
+  // ----- real-map mode: Leaflet owns the mouse, so we listen to its events instead of the canvas's
+  function cellOfEvent(e) { const v = PF.setup.view(); return v ? PF.setup.cellFromContainerPoint(e.containerPoint, v) : -1; }
+
+  function syncLeafletTool() {
+    const lf = PF.setup && PF.setup.lf;
+    if (!lf) return;
+    if (PF.tool === 'wall' || PF.tool === 'erase') lf.dragging.disable(); else lf.dragging.enable();   // paint, or pan
+  }
+
+  function bindLeaflet() {
+    const lf = PF.setup.lf;
+    if (!lf || lf._pfBound) return;
+    lf._pfBound = true;
+    lf.on('mousedown', (e) => { if (PF.tool === 'wall' || PF.tool === 'erase') { PF.painting = true; applyTool(cellOfEvent(e)); } });
+    lf.on('mousemove', (e) => {
+      const cell = cellOfEvent(e);
+      $('pf-hover').textContent = cell < 0 ? '' : `x ${cell % PF.size}, y ${(cell / PF.size) | 0} · ${SN.TERRAIN_NAMES[PF.map.terrain[cell]]} · cost ${PF.cost[cell] || 'blocked'}`;
+      if (PF.painting) applyTool(cell);
+    });
+    const end = () => { if (PF.painting) { PF.painting = false; check(); } };
+    lf.on('mouseup', end);
+    lf.on('click', (e) => { if (PF.tool === 'start' || PF.tool === 'goal') { applyTool(cellOfEvent(e)); check(); } });
+    syncLeafletTool();
   }
 
   // ------------------------------------------------------------------ the race
@@ -136,13 +169,14 @@
       const el = document.createElement('div');
       el.className = 'card';
       el.innerHTML = `<div class="head"><b style="color:${algo.css}">${algo.name}</b><small>${algo.how}</small><button title="Full screen">⛶</button></div>
-        <div class="cv"><canvas></canvas></div><div class="foot"></div>`;
+        <div class="cv"><div class="lf" hidden></div><canvas></canvas></div><div class="foot"></div>`;
       cards.appendChild(el);
       const over = document.createElement('canvas');
       over.width = W; over.height = W;
-      const card = { algo, res, el, cv: el.querySelector('canvas'), foot: el.querySelector('.foot'), cam: new SN.Camera(),
+      const card = { algo, res, el, cv: el.querySelector('canvas'), foot: el.querySelector('.foot'),
         over, octx: over.getContext('2d'), img: null, cursor: 0, done: false, finishRank: 0, badges: '' };
-      card.cam.fit(W, W);
+      card.surf = new SN.stage.Surface(card.cv, el.querySelector('.lf'), false);
+      card.surf.attach(PF.map);
       el.querySelector('button').addEventListener('click', () => {
         if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen && el.requestFullscreen();
       });
@@ -152,6 +186,10 @@
     resetRace();
     $('pf-setup').hidden = true;
     $('pf-race').hidden = false;
+  }
+
+  function closeRace() {                                  // remove the Leaflet maps of the four cards
+    if (PF.race) for (const c of PF.race.cards) c.surf.destroyLeaflet();
   }
 
   function resetRace() {
@@ -221,9 +259,10 @@
   }
 
   function drawCard(c, now) {
-    if (!R.fitCanvas(c.cv)) return;
+    const v = c.surf.view();
+    if (!v) return;
     c.octx.putImageData(c.img, 0, 0);
-    const ctx = c.cv.getContext('2d'), v = c.cam.view(c.cv.width, c.cv.height);
+    const ctx = c.cv.getContext('2d');
     R.drawBase(ctx, v, PF.world, PF.mode, now);
     ctx.globalAlpha = 0.7;
     ctx.imageSmoothingEnabled = false;
@@ -234,7 +273,8 @@
     R.drawFlag(ctx, v, PF.start, '#e04838', 'S');
     R.drawFlag(ctx, v, PF.goal, '#48b060', 'G');
     const status = c.done
-      ? `✔ reached the goal · route cost <b>${c.res.cost}</b> · ${c.res.path.length - 1} steps`
+      ? `✔ reached the goal · route cost <b>${c.res.cost}</b> · ${c.res.path.length - 1} steps` +
+        (PF.map.real ? ` (≈ ${Math.round((c.res.path.length - 1) * PF.map.cellMeters)} m)` : '')
       : '⏳ searching…';
     const html = `<span>Expanded: <b>${c.cursor}</b></span><span>${status}</span>${c.badges}`;
     if (c.foot.dataset.html !== html) { c.foot.innerHTML = html; c.foot.dataset.html = html; }
@@ -258,6 +298,7 @@
     });
     $('race-reset').addEventListener('click', resetRace);
     $('race-edit').addEventListener('click', () => {
+      closeRace();
       PF.race = null;
       $('pf-race').hidden = true;
       $('pf-setup').hidden = false;
@@ -276,13 +317,36 @@
     });
   }
 
+  // The size list only makes sense for generated towns; the real map has one fixed size.
+  function sizeOptions() {
+    const sel = $('pf-size');
+    if (SN.stage.real) { sel.innerHTML = `<option>Pune · ${SN.stage.pune.W} × ${SN.stage.pune.H}</option>`; sel.disabled = true; }
+    else { if (!SN.SIZES.includes(PF.size)) PF.size = 100;      // coming back from the 300 x 300 Pune grid
+      sel.innerHTML = SN.SIZES.map((s) => `<option value="${s}">${s} × ${s}</option>`).join(''); sel.value = String(PF.size); sel.disabled = false; }
+    $('pf-new').title = SN.stage.real ? 'New start and goal' : 'Generate a new town';
+  }
+
+  // The mode switch (pixel town <-> real map) changed: start again on the other map.
+  function onMode() {
+    closeRace();
+    PF.race = null;
+    $('pf-race').hidden = true;
+    $('pf-setup').hidden = false;
+    PF.setup.destroyLeaflet();
+    sizeOptions();
+    if (!SN.stage.real) PF.size = +$('pf-size').value;
+    newMap();
+  }
+
   let last = 0;
   SN.pathfinder = {
     init() {
+      PF.setup = new SN.stage.Surface($('pf-map'), $('pf-lf'), true);
       bindSetup(); bindRace(); bindViewToggles();
       newMap();
       $('race-speed-v').textContent = '1×';
     },
+    onMode,
     frame(now) {
       const dt = Math.min(100, last ? now - last : 16.7);
       last = now;

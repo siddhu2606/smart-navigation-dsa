@@ -3,7 +3,7 @@
 const path = require('path');
 const root = path.join(__dirname, '..');
 globalThis.SN = {};
-for (const f of ['config', 'rng', 'mapgen']) require(path.join(root, 'js', f + '.js'));
+for (const f of ['config', 'rng', 'mapgen', 'stage']) require(path.join(root, 'js', f + '.js'));
 const engine = require(path.join(root, 'js', 'engine.js'));
 const createEngine = require(path.join(root, 'engine', 'engine.js'));
 const SN = globalThis.SN;
@@ -53,6 +53,31 @@ const ok = (cond, msg) => { checks++; if (!cond) { failed++; console.log('FAIL: 
     }
     console.log(`${size}/${seed}: ok. priority: safe ${results[0].safe}, lost ${results[0].lost}; fifo: safe ${results[1].safe}, lost ${results[1].lost}`);
   }
+  // ---- the real map of Pune (data/pune.json, made from OpenStreetMap)
+  globalThis.fetch = async (url) => ({ json: async () => JSON.parse(require('fs').readFileSync(path.join(root, url), 'utf8')) });
+  const pune = await SN.stage.loadPune();
+  const pcost = SN.mapgen.costArray(pune.terrain);
+  ok(pune.W === 300 && pune.buildings.length > 1000, `Pune: ${pune.buildings.length - 1} buildings`);
+  ok(pune.buildings.some((b) => b.kind === 'hospital') && pune.buildings.some((b) => b.kind === 'shelter'), 'Pune has hospitals and shelters');
+  const pdoors = pune.buildings.slice(1).map((b) => b.door);
+  let pc = 0;
+  for (let k = 0; k < 8; k++) {
+    const a = pdoors[k * 97 % pdoors.length], b = pdoors[(k * 211 + 500) % pdoors.length];
+    const r = SN.ALGOS.map((al) => engine.search(al.id, pcost, 300, 300, a, b));
+    ok(r.every((x) => x.found), 'Pune: every door pair is connected');
+    ok(r[3].cost === r[2].cost, 'Pune: A* cost equals Dijkstra cost');
+    ok(r[3].order.length <= r[2].order.length, 'Pune: A* expands no more cells than Dijkstra');
+    pc++;
+  }
+  const ps = SN.stage.pickPuneSites(pune, 'x', 3);
+  ok(ps.hospital && ps.shelters.length === 3 && ps.fire, 'Pune: sites picked');
+  const pp = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, seed: 1, priority: true, base: [10, 40, 70, 100], female: 0, aging: 1 };
+  engine.simInit(pune, pcost, pdoors.filter((d) => d), ps.shelters.map((b) => b.door), ps.hospital.door, ps.fire.cell, pp);
+  engine.simRun();
+  const pm = engine.simMetrics();
+  ok(pm.safe + pm.lost + pm.stranded + (pm.people - pm.alerted) === pm.people, 'Pune: every person accounted for');
+  ok(pm.alerted > 0 && pm.alerted < pm.people, `Pune: only people near the fire evacuate (${pm.alerted}/${pm.people})`);
+  console.log(`Pune: ok. alerted ${pm.alerted}, safe ${pm.safe}, lost ${pm.lost}, stranded ${pm.stranded}`);
   console.log(`${checks} checks, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
