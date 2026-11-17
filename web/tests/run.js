@@ -71,7 +71,7 @@ const ok = (cond, msg) => { checks++; if (!cond) { failed++; console.log('FAIL: 
   }
   const ps = SN.stage.pickPuneSites(pune, 'x', 3);
   ok(ps.hospital && ps.shelters.length === 3 && ps.fire, 'Pune: sites picked');
-  const pp = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, fireRadius: 12, seed: 1, priority: true, base: [10, 40, 70, 100], female: 0, aging: 1 };
+  const pp = { people: 200, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, fireRadius: 12, seed: 1, priority: true, base: [10, 40, 70, 100], female: 0, aging: 1 };
   engine.simInit(pune, pcost, pdoors.filter((d) => d), ps.shelters.map((b) => b.door), ps.hospital.door, ps.fire.cell, pp);
   engine.simRun();
   const pm = engine.simMetrics();

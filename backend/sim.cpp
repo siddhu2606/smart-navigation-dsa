@@ -42,13 +42,20 @@ Simulation::Simulation(const vector<int>& terr, const vector<int>& cost, int w, 
     bedsUsed.assign(shelters.size(), 0);
 
     // people live behind random doors; the kind is drawn from a fixed mix
+    // Most people live in the neighbourhood of the fire (like in a real town), the rest anywhere in the town.
+    vector<int> nearDoors;
+    for (int d : doors) {
+        int dx = d % W - fireCell % W, dy = d / W - fireCell / W;
+        if (dx * dx + dy * dy <= 4 * params.alertRadius * params.alertRadius) nearDoors.push_back(d);
+    }
     discrete_distribution<int> mix({55, 20, 12, 13});   // ADULT, DEPENDENT, DISABLED, INJURED
     for (int i = 0; i < params.people && !doors.empty(); i++) {
         Person q;
         q.id = i;
         q.kind = mix(rng);
         q.female = (rng() % 2 == 0);
-        q.cell = doors[rng() % doors.size()];
+        bool local = !nearDoors.empty() && rng() % 100 < 70;
+        q.cell = local ? nearDoors[rng() % nearDoors.size()] : doors[rng() % doors.size()];
         people.push_back(q);
     }
 

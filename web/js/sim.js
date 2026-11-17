@@ -17,7 +17,7 @@
   };
 
   const SCENARIO = [
-    { id: 'people', label: 'People in town', min: 20, max: 400, val: 150 },
+    { id: 'people', label: 'People in town', min: 20, max: 600, val: 200 },
     { id: 'ambulances', label: 'Ambulances', min: 1, max: 10, val: 4 },
     { id: 'medics', label: 'Medics', min: 0, max: 6, val: 2 },
     { id: 'beds', label: 'Beds per shelter', min: 5, max: 150, val: 40 },
