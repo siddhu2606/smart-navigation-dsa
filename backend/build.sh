@@ -17,6 +17,7 @@ case "${1:-demo}" in
     g++ -std=c++17 -O2 -Wall -Wextra $SAN $CORE tests/tests.cpp -o build/tests
     ./build/tests ;;
   wasm)
+    mkdir -p ../web/engine
     emcc -std=c++17 -O2 $CORE wasm_api.cpp -o ../web/engine/engine.js \
       -sMODULARIZE=1 -sEXPORT_NAME=createEngine -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web,node \
       -sEXPORTED_FUNCTIONS=_malloc,_free,_sn_search,_sn_search_order,_sn_search_path,_sn_search_path_len,_sn_search_cost,_sn_sim_init,_sn_sim_step,_sn_sim_run,_sn_sim_tick,_sn_sim_people,_sn_sim_people_count,_sn_sim_ambulances,_sn_sim_ambulance_count,_sn_sim_new_fire,_sn_sim_new_fire_count,_sn_sim_queue,_sn_sim_queue_count,_sn_sim_metrics,_sn_sim_beds \
