@@ -1,6 +1,6 @@
 // stage.js - where a map is drawn: the pixel-art town (our own camera) or the real map of Pune (Leaflet).
 //
-// Leaflet only draws the background and handles pan / zoom. All routing is done by our own C++ code on the
+// Leaflet only draws the background and handles pan and zoom. All routing is done by our own C++ code on the
 // grid made from OpenStreetMap (tools/build_pune.js). The canvas on top of Leaflet draws the search,
 // the people, the ambulances and the fire, using Leaflet only to convert a cell to a screen position.
 (function (SN) {
@@ -20,10 +20,12 @@
     return stage.pune;
   };
 
-  // Landmarks of the real map: a hospital, shelters (schools, halls...) far apart, and a house near the middle.
+  // Landmarks of the real map: a hospital, shelters (schools, halls...) far apart.
   stage.pickPuneSites = function (map, seed, shelterCount) {
     const rng = new SN.RNG(String(seed) + '|pune'), W = map.W;
-    const bs = map.buildings.slice(1).filter((b) => b.door >= 0);
+    const cx = map.W / 2, cy = map.H / 2;
+    // stay in the middle of the map, so the evacuation happens where the user is looking
+    const bs = map.buildings.slice(1).filter((b) => b.door >= 0 && Math.hypot(b.x - cx, b.y - cy) < map.W * 0.3);
     const dist = (a, b) => Math.hypot((a.door % W) - (b.door % W), ((a.door / W) | 0) - ((b.door / W) | 0));
     const hospitals = bs.filter((b) => b.kind === 'hospital'), shelterPool = bs.filter((b) => b.kind === 'shelter');
     const hospital = hospitals.length ? hospitals[rng.int(hospitals.length)] : bs[rng.int(bs.length)];
@@ -37,19 +39,32 @@
       }
       if (best) shelters.push(best);
     }
+    // the first incident: a house near the middle
     const houses = bs.filter((b) => b.kind === 'house');
-    const cx = map.W / 2, cy = map.H / 2;
     houses.sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
-    const fire = houses[rng.int(Math.min(40, houses.length))];
-    return { hospital, shelters, fire };
+    return { hospital, shelters, fire: houses[rng.int(Math.min(40, houses.length))] };
+  };
+
+  // Keep several Leaflet maps (the four race cards) at the same centre and zoom.
+  stage.syncGroup = function (surfaces) {
+    if (!stage.real) return;
+    let lock = false;
+    for (const s of surfaces) {
+      s.lf.on('move', () => {
+        if (lock) return;
+        lock = true;
+        const c = s.lf.getCenter(), z = s.lf.getZoom();
+        for (const o of surfaces) if (o !== s && o.lf) o.lf.setView(c, z, { animate: false });
+        lock = false;
+      });
+    }
   };
 
   // A surface = one canvas, plus (in real mode) a Leaflet map underneath it.
-  //   lfDiv: the element Leaflet draws into.  interactive: may the user pan and zoom it?
   stage.Surface = class {
-    constructor(cv, lfDiv, interactive) {
-      this.cv = cv; this.div = lfDiv; this.interactive = !!interactive;
-      this.cam = new SN.Camera(); this.lf = null; this.map = null; this.size = '';
+    constructor(cv, lfDiv) {
+      this.cv = cv; this.div = lfDiv;
+      this.cam = new SN.Camera(); this.lf = null; this.map = null; this.size = ''; this.needsFit = false;
     }
 
     // Call whenever the map (or the mode) changes.
@@ -59,8 +74,7 @@
       if (stage.real && map.real) {
         box.classList.add('real');
         this.div.hidden = false;
-        if (!this.lf) this.createLeaflet(map);
-        else this.fit();
+        if (!this.lf) this.createLeaflet(map); else this.needsFit = true;
       } else {
         box.classList.remove('real');
         this.destroyLeaflet();
@@ -69,25 +83,68 @@
     }
 
     createLeaflet(map) {
-      const it = this.interactive;
-      this.lf = L.map(this.div, { zoomControl: it, dragging: it, scrollWheelZoom: it, touchZoom: it, doubleClickZoom: false,
-        boxZoom: false, keyboard: false, zoomSnap: 0.25, minZoom: 14, maxZoom: 19, attributionControl: true });
+      this.lf = L.map(this.div, { zoomControl: false, doubleClickZoom: false, boxZoom: false, keyboard: false, zoomSnap: 0.25,
+        maxZoom: 21, attributionControl: true, maxBoundsViscosity: 1 });
       this.lf.attributionControl.setPrefix(false);
-      this.lf.setView([(map.bbox.s + map.bbox.n) / 2, (map.bbox.w + map.bbox.e) / 2], 16, { animate: false });
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(this.lf);
-      this.fit();
+      this.lf.setView([(map.bbox.s + map.bbox.n) / 2, (map.bbox.w + map.bbox.e) / 2], 15, { animate: false });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: '© OpenStreetMap contributors' }).addTo(this.lf);
+      this.needsFit = true;
     }
 
+    // Show the grid so that the view is always INSIDE it: there is no empty margin where nothing can be placed,
+    // and you cannot pan or zoom out past the edge of the grid.
     fit() {
-      if (this.div.clientWidth < 10 || this.div.clientHeight < 10) return;       // hidden: fit later, when it has a size
-      const b = this.map.bbox;
+      if (!this.lf || this.div.clientWidth < 10 || this.div.clientHeight < 10) return;
+      const b = this.map.bbox, bounds = L.latLngBounds([b.s, b.w], [b.n, b.e]);
       this.lf.invalidateSize(false);
-      this.lf.fitBounds([[b.s, b.w], [b.n, b.e]], { animate: false, padding: [4, 4] });
+      const z = Math.ceil(this.lf.getBoundsZoom(bounds, true) * 4) / 4;      // smallest zoom where the view fits in the grid
+      this.lf.setMinZoom(z);
+      this.lf.setMaxBounds(bounds);
+      this.lf.setView(bounds.getCenter(), z, { animate: false });
+      this.needsFit = false;
     }
 
     destroyLeaflet() {
       if (this.lf) { this.lf.remove(); this.lf = null; }
       this.div.hidden = true;
+    }
+
+    // map controls (+, -, fit), the same for both kinds of map
+    zoom(factor) {
+      if (this.lf) this.lf.setZoom(this.lf.getZoom() + Math.log2(factor), { animate: false });
+      else this.cam.zoomBy(factor, this.cv.width, this.cv.height);
+    }
+    home() { if (this.lf) this.fit(); else this.cam.fit(this.map.W, this.map.H); }
+
+    // Mouse wheel (and, if shouldPan is given, drag) on the canvas move our own camera (the town).
+    // Leaflet does it itself in real mode.
+    bindCamera(shouldPan) {
+      const cv = this.cv;
+      let drag = null;
+      cv.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
+        this.cam.zoomAt(cv.width, cv.height, (e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr, e.deltaY < 0 ? 1.25 : 0.8);
+      }, { passive: false });
+      if (shouldPan) {
+        cv.addEventListener('pointerdown', (e) => {
+          if (!shouldPan(e)) return;
+          cv.setPointerCapture(e.pointerId);
+          drag = { x: e.clientX, y: e.clientY };
+          e.stopImmediatePropagation();
+        }, true);
+        cv.addEventListener('pointermove', (e) => {
+          if (!drag) return;
+          const v = this.view(), dpr = cv.width / cv.getBoundingClientRect().width;
+          if (v) this.cam.panBy((e.clientX - drag.x) * dpr, (e.clientY - drag.y) * dpr, v.s);
+          drag.x = e.clientX; drag.y = e.clientY;
+          e.stopImmediatePropagation();
+        }, true);
+        const end = () => { drag = null; };
+        cv.addEventListener('pointerup', end, true);
+        cv.addEventListener('pointercancel', end, true);
+      }
+      this.dragging = () => !!drag;
     }
 
     // The mapping cell -> canvas pixels for the current frame (or null if the canvas has no size yet).
@@ -97,17 +154,15 @@
       const map = this.map, W = map.W, H = map.H;
       if (!this.lf) return this.cam.view(cv.width, cv.height);
       const key = this.div.clientWidth + 'x' + this.div.clientHeight;
-      if (key !== this.size) {                    // the box changed size (window, full screen, tab shown)
-        this.size = key;
-        if (this.interactive) this.lf.invalidateSize(false); else this.fit();
-      }
+      if (key !== this.size) { this.size = key; this.needsFit = true; this.lf.invalidateSize(false); }
+      if (this.needsFit) this.fit();
       const dpr = cv.width / cv.clientWidth, b = map.bbox;
       const p0 = this.lf.latLngToContainerPoint([b.n, b.w]), p1 = this.lf.latLngToContainerPoint([b.s, b.e]);
       const s = ((p1.x - p0.x) / W) * dpr;
       return SN.render.makeView(cv.width, cv.height, W, H, s, p0.x * dpr, p0.y * dpr);
     }
 
-    // canvas pixel (device) of a map-container point from a Leaflet event, as a cell index
+    // a point in the Leaflet container (from a Leaflet mouse event) as a cell index
     cellFromContainerPoint(pt, v) {
       const dpr = this.cv.width / this.cv.clientWidth;
       const x = Math.floor((pt.x * dpr - v.ox) / v.s), y = Math.floor((pt.y * dpr - v.oy) / v.s);

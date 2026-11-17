@@ -1,14 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Navigation: Path Finder and Disaster Sim</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
+<script>
+  // apply the saved theme before anything is drawn (no flash)
+  try { var t = localStorage.getItem('sn-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); document.documentElement.dataset.theme = t; } catch (e) { /* no storage: stay dark */ }
+</script>
 </head>
 <body>
 <header class="topbar">
@@ -19,11 +23,12 @@
   </nav>
   <div class="pill" id="engine-pill">loading C++ engine…</div>
   <label class="switch" id="mode-label" data-real="false" title="Switch between the pixel-art town and a real map of Pune (Leaflet)">
-    <span class="l town">🎮 Town</span>
+    <span class="l town">Town</span>
     <input type="checkbox" id="mode-switch">
     <span class="track"><i></i></span>
-    <span class="l real">🗺 Real map</span>
+    <span class="l real">Real map</span>
   </label>
+  <button class="icon-btn" id="theme-btn" title="Light / dark theme" aria-label="Light or dark theme">☾</button>
 </header>
 
 <div id="boot" class="boot">Loading the C++ engine (WebAssembly)…</div>
@@ -31,20 +36,26 @@
 <!-- ===================================================== PATH FINDER ===================================================== -->
 <main id="tab-path" class="page" hidden>
   <section id="pf-setup" class="split">
-    <div class="map-box"><div class="lf" id="pf-lf" hidden></div><canvas id="pf-map"></canvas><div class="hover" id="pf-hover"></div></div>
+    <div class="map-box"><div class="lf" id="pf-lf" hidden></div><canvas id="pf-map"></canvas>
+      <div class="map-tools">
+        <button id="pf-zoom-in" title="Zoom in">+</button><button id="pf-zoom-out" title="Zoom out">−</button><button id="pf-fit" title="Fit the map">⤢</button>
+      </div>
+      <div class="hover" id="pf-hover"></div>
+    </div>
     <aside class="side box">
-      <h2>1 · Map</h2>
+      <h2>Map</h2>
       <div class="row">
         <label>Size <select id="pf-size"></select></label>
         <button id="pf-new">New map</button>
       </div>
-      <h2>2 · Place the points</h2>
-      <p class="hint">Pick a tool, then click (or drag) on the map.</p>
+      <h2>Place the points</h2>
+      <p class="hint">Pick a tool, then click or drag on the map. Scroll to zoom.</p>
       <div class="tools" id="pf-tools">
         <button class="tool active" data-tool="start"><span class="dot s">S</span> Start</button>
         <button class="tool" data-tool="goal"><span class="dot g">G</span> Goal</button>
         <button class="tool" data-tool="wall">▦ Wall</button>
         <button class="tool" data-tool="erase">⌫ Erase</button>
+        <button class="tool" data-tool="pan">✥ Pan</button>
       </div>
       <label class="row">Brush <input type="range" id="pf-brush" min="1" max="8" value="2"> <b id="pf-brush-v">2</b></label>
       <div class="status" id="pf-status"></div>
@@ -62,9 +73,10 @@
       <label>Speed <input type="range" id="race-speed" min="-1.5" max="1.5" step="0.05" value="0"> <b id="race-speed-v">1×</b></label>
       <button id="race-reset">↺ Reset</button>
       <button id="race-edit">✎ Edit map</button>
+      <span class="grp"><button id="race-zoom-in" title="Zoom in (all four maps)">+</button><button id="race-zoom-out" title="Zoom out">−</button><button id="race-fit" title="Fit the map">⤢</button></span>
       <div class="view-toggle" data-for="race"><button class="active" data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
     </div>
-    <div class="banner box" id="race-banner">Ready. Every algorithm gets the same number of steps per second.</div>
+    <div class="banner box" id="race-banner">Ready.</div>
     <div class="cards" id="race-cards"></div>
   </section>
 </main>
@@ -74,7 +86,7 @@
   <section class="split">
     <div class="map-box"><div class="lf" id="sim-lf" hidden></div><canvas id="sim-map"></canvas>
       <div class="map-tools">
-        <button id="sim-zoom-in">+</button><button id="sim-zoom-out">−</button><button id="sim-fit">⤢</button>
+        <button id="sim-zoom-in" title="Zoom in">+</button><button id="sim-zoom-out" title="Zoom out">−</button><button id="sim-fit" title="Fit the map">⤢</button>
       </div>
       <div class="hover" id="sim-hover"></div>
     </div>
@@ -86,26 +98,30 @@
       </div>
       <label class="row">Speed <input type="range" id="sim-speed" min="-1" max="1.6" step="0.05" value="0.3"> <b id="sim-speed-v"></b></label>
       <div class="view-toggle" data-for="sim"><button class="active" data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
-      <p class="hint" id="sim-hint">Click a building to start the fire there (or press <b>Random fire</b>). Only people near the fire are evacuated.</p>
+      <p class="hint" id="sim-hint"></p>
 
-      <details open><summary>Scenario</summary>
-        <div class="sliders" id="sim-scenario"></div>
-        <div class="row"><button id="sim-newmap">New map</button><button id="sim-randfire">Random fire</button></div>
-      </details>
-      <details open><summary>Priority order (drag to change)</summary>
-        <ul id="sim-order" class="order"></ul>
-        <div class="sliders" id="sim-weights"></div>
-        <label class="check"><input type="checkbox" id="sim-priority" checked> Use the priority queue (off = first come, first served)</label>
-      </details>
-      <details open><summary>Live</summary>
-        <div class="stats" id="sim-stats"></div>
-        <h3>Ambulance line (next to be picked up)</h3>
+      <section class="panel">
+        <h2>Ambulance queue <span id="sim-qcount" class="cnt"></span></h2>
         <div id="sim-queue" class="queue"></div>
-      </details>
-      <details open><summary>Compare policies</summary>
-        <button id="sim-compare">Run both on this scenario</button>
+      </section>
+
+      <section class="panel">
+        <h2>Status</h2>
+        <div class="stats" id="sim-stats"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Priority order</h2>
+        <p class="hint">Drag the groups (or use the arrows). The top group is picked up first.</p>
+        <ul id="sim-order" class="order"></ul>
+        <label class="check"><input type="checkbox" id="sim-priority" checked> Serve by priority <small>(off: first come, first served)</small></label>
+      </section>
+
+      <section class="panel">
+        <h2>Priority queue or plain queue?</h2>
+        <button id="sim-compare">Run both on this incident</button>
         <div id="sim-compare-out"></div>
-      </details>
+      </section>
     </aside>
   </section>
 </main>

@@ -57,13 +57,13 @@ const ok = (cond, msg) => { checks++; if (!cond) { failed++; console.log('FAIL: 
   globalThis.fetch = async (url) => ({ json: async () => JSON.parse(require('fs').readFileSync(path.join(root, url), 'utf8')) });
   const pune = await SN.stage.loadPune();
   const pcost = SN.mapgen.costArray(pune.terrain);
-  ok(pune.W === 300 && pune.buildings.length > 1000, `Pune: ${pune.buildings.length - 1} buildings`);
+  ok(pune.W === 600 && pune.buildings.length > 5000, `Pune: ${pune.buildings.length - 1} buildings`);
   ok(pune.buildings.some((b) => b.kind === 'hospital') && pune.buildings.some((b) => b.kind === 'shelter'), 'Pune has hospitals and shelters');
   const pdoors = pune.buildings.slice(1).map((b) => b.door);
   let pc = 0;
   for (let k = 0; k < 8; k++) {
     const a = pdoors[k * 97 % pdoors.length], b = pdoors[(k * 211 + 500) % pdoors.length];
-    const r = SN.ALGOS.map((al) => engine.search(al.id, pcost, 300, 300, a, b));
+    const r = SN.ALGOS.map((al) => engine.search(al.id, pcost, pune.W, pune.W, a, b));
     ok(r.every((x) => x.found), 'Pune: every door pair is connected');
     ok(r[3].cost === r[2].cost, 'Pune: A* cost equals Dijkstra cost');
     ok(r[3].order.length <= r[2].order.length, 'Pune: A* expands no more cells than Dijkstra');

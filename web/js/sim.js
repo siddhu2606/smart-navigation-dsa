@@ -1,69 +1,50 @@
-// Disaster Sim: a fire starts in ONE building. Only the people near it are told to leave.
+// Disaster Sim: an incident (a fire) starts where you click. Only the people near it are told to leave.
 // Ambulances, shelter beds and medics are shared, and the C++ engine decides who is served first with a
 // priority queue (std::priority_queue). The page only draws what the engine reports after each tick.
 (function (SN) {
   'use strict';
   const T = SN.T, K = SN.KINDS, ST = SN.STATE, R = SN.render, $ = (id) => document.getElementById(id);
-  const TPS = 20;   // ticks per second at 1x
+  const TPS = 20;                          // ticks per second at 1x
+  const BASES = [100, 70, 40, 10];         // priority points for rank 1, 2, 3, 4
+  // Everything except the priority order is fixed.
+  const DEFAULTS = { people: 200, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, fireRadius: 12, female: 0, aging: 1 };
+  const TOWN_SIZE = 150;
 
   const S = {
-    size: 100, seed: '', map: null, world: null, surf: null, mode: 'physical',
+    size: TOWN_SIZE, seed: 1, map: null, world: null, surf: null, mode: 'physical',
     sites: null, fireCell: 0, doors: [], shelterCells: [], depot: 0, cost: null,
     phase: 'ready',                       // ready | running | paused | done
     speed: 2, acc: 0, fireApplied: false,
-    cur: null, prev: null, amb: null, ambPrev: null, queue: [], beds: [], metrics: null,
-    vals: {},                             // slider values by id
-    order: SN.DEFAULT_ORDER.slice(),      // kinds, most urgent first (the page lets you drag them)
+    cur: null, prev: null, amb: null, ambPrev: null, queue: [], metrics: null,
+    order: SN.DEFAULT_ORDER.slice(),      // the four groups, most urgent first (the page lets you drag them)
   };
 
-  const SCENARIO = [
-    { id: 'people', label: 'People in town', min: 20, max: 600, val: 200 },
-    { id: 'ambulances', label: 'Ambulances', min: 1, max: 10, val: 4 },
-    { id: 'medics', label: 'Medics', min: 0, max: 6, val: 2 },
-    { id: 'beds', label: 'Beds per shelter', min: 5, max: 150, val: 40 },
-    { id: 'radius', label: 'Evacuation radius', min: 5, max: 60, val: 25 },
-    { id: 'fireEvery', label: 'Fire spread (ticks)', min: 2, max: 20, val: 6 },
-    { id: 'fireRadius', label: 'Fire size (max radius)', min: 2, max: 40, val: 12 },
-    { id: 'seed', label: 'Population seed', min: 1, max: 99, val: 1 },
-  ];
-  const WEIGHTS = [{ id: 'female', label: 'Women (bonus)', min: 0, max: 50, val: 0 }, { id: 'aging', label: 'Aging per tick', min: 0, max: 5, val: 1 }];
-  const BASES = [100, 70, 40, 10];          // priority points for rank 1, 2, 3, 4
-
   // ------------------------------------------------------------------ building the scenario
-  function newMap(keepSeed) {
-    if (!keepSeed) S.seed = 'sim' + Math.floor(Math.random() * 1e6);
+  function newMap() {
     if (SN.stage.real) {
       const p = SN.stage.pune;
       S.map = Object.assign({}, p, { terrain: p.base.slice() });     // a fresh copy: fire changes it
-      S.sites = SN.stage.pickPuneSites(S.map, S.seed, 3);
+      S.sites = SN.stage.pickPuneSites(S.map, 'sim', 3);
     } else {
-      S.map = SN.mapgen.generate(S.size, S.size, S.seed);
+      S.map = SN.mapgen.generate(S.size, S.size, 'sim' + Math.floor(Math.random() * 1e6));
+      S.sites = SN.mapgen.pickSites(S.map, S.map.seed, 3);
     }
     S.size = S.map.W;
     S.world = new SN.World(S.map);
     S.surf.attach(S.map);
     bindLeaflet();
-    if (!SN.stage.real) S.sites = SN.mapgen.pickSites(S.map, S.seed, 3);
     S.world.repaintAll();                                       // building colours changed (hospital, shelters)
     S.depot = S.sites.hospital.door;
     S.shelterCells = S.sites.shelters.map((b) => b.door);
     S.doors = S.map.buildings.slice(1).filter((b) => b.door >= 0 && b.door && b.kind === 'house').map((b) => b.door);
-    S.cost = SN.mapgen.costArray(S.map.terrain);
-    setFireBuilding(S.sites.fire);
+    S.fireCell = centreCell(S.sites.fire);
+    rebuild();
   }
 
   function centreCell(b) { return b.cell >= 0 && b.cell !== undefined ? b.cell : (b.y + (b.h >> 1)) * S.map.W + b.x + (b.w >> 1); }
 
-  function setFireBuilding(b) {
-    S.fireBuilding = b;
-    S.fireCell = centreCell(b);
-    rebuild();
-  }
-
   function params(priority) {
-    const v = S.vals;
-    return { people: v.people, ambulances: v.ambulances, medics: v.medics, beds: v.beds, radius: v.radius,
-      fireEvery: v.fireEvery, fireRadius: v.fireRadius, seed: v.seed, priority, base: K.map((k, i) => BASES[S.order.indexOf(i)]), female: v.female, aging: v.aging };
+    return Object.assign({}, DEFAULTS, { seed: S.seed, priority, base: K.map((k, i) => BASES[S.order.indexOf(i)]) });
   }
 
   function resetTerrain() {
@@ -73,7 +54,7 @@
     S.fireApplied = false;
   }
 
-  // (Re)create the simulation in the engine from the current sliders: tick 0, nothing has moved yet.
+  // (Re)create the simulation in the engine: tick 0, nothing has moved yet.
   function rebuild() {
     resetTerrain();
     S.cost = SN.mapgen.costArray(S.map.terrain);
@@ -92,7 +73,6 @@
     S.cur = SN.engine.simPeople();
     S.amb = SN.engine.simAmbulances();
     S.queue = SN.engine.simQueue();
-    S.beds = SN.engine.simBeds(S.shelterCells.length);
     S.metrics = SN.engine.simMetrics();
   }
 
@@ -112,35 +92,22 @@
     updatePanel();
   }
 
-  // ------------------------------------------------------------------ side panel
-  function buildControls() {
-    const make = (list, box) => {
-      box.innerHTML = list.map((c) => `<label>${c.label}<input type="range" id="sl-${c.id}" min="${c.min}" max="${c.max}" value="${c.val}"><b id="sv-${c.id}">${c.val}</b></label>`).join('');
-      for (const c of list) {
-        S.vals[c.id] = c.val;
-        $('sl-' + c.id).addEventListener('input', (e) => {
-          S.vals[c.id] = +e.target.value;
-          $('sv-' + c.id).textContent = e.target.value;
-        });
-        $('sl-' + c.id).addEventListener('change', rebuild);      // rebuild once the slider is released
-      }
-    };
-    make(SCENARIO, $('sim-scenario'));
-    make(WEIGHTS, $('sim-weights'));
-    buildOrder();
-    const sel = document.createElement('label');
-    sel.innerHTML = 'Map size <select id="sim-size">' + [100, 150, 200].map((s) => `<option value="${s}">${s} × ${s}</option>`).join('') + '</select>';
-    sel.style.cssText = 'display:flex;gap:10px;align-items:center;font-size:13px';
-    $('sim-scenario').prepend(sel);
-    $('sim-size').addEventListener('change', (e) => { S.size = +e.target.value; newMap(); });
+  // ------------------------------------------------------------------ the incident
+  function placeIncident(cell) {
+    if (cell < 0 || S.phase !== 'ready') return;
+    const t = S.map.terrain[cell];
+    if (t === T.DEEP || t === T.SHALLOW) { $('sim-hint').textContent = 'The incident has to be on land. Pick another spot.'; return; }
+    S.fireCell = cell;
+    rebuild();
   }
 
+  // ------------------------------------------------------------------ side panel
   // The priority order: drag a group up or down (or use the arrows). The top group is served first.
   function buildOrder() {
     const ul = $('sim-order');
     ul.innerHTML = S.order.map((k, rank) => `<li draggable="true" data-kind="${k}"><span class="grip">⋮⋮</span>
       <i style="background:${K[k].color}"></i><span class="nm"><b>${rank + 1}. ${K[k].name}</b><small>${K[k].note}</small></span>
-      <span class="pts">${BASES[rank]}</span><button data-up>▲</button><button data-down>▼</button></li>`).join('');
+      <span class="pts">${BASES[rank]}</span><button data-up title="Move up">▲</button><button data-down title="Move down">▼</button></li>`).join('');
     let from = -1;
     ul.querySelectorAll('li').forEach((li, idx) => {
       li.addEventListener('dragstart', (e) => { from = idx; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; });
@@ -152,6 +119,7 @@
       li.querySelector('[data-down]').addEventListener('click', () => idx < S.order.length - 1 && moveKind(idx, idx + 1));
     });
   }
+
   function moveKind(from, to) {
     const [k] = S.order.splice(from, 1);
     S.order.splice(to, 0, k);
@@ -159,44 +127,42 @@
     rebuild();
   }
 
-  function sizeOptions() {
-    const sel = $('sim-size');
-    if (SN.stage.real) { sel.innerHTML = `<option>Pune · ${SN.stage.pune.W} × ${SN.stage.pune.H}</option>`; sel.disabled = true; }
-    else { if (![100, 150, 200].includes(S.size)) S.size = 100;
-      sel.innerHTML = [100, 150, 200].map((n) => `<option value="${n}">${n} × ${n}</option>`).join(''); sel.value = String(S.size); sel.disabled = false; }
-  }
-
-  const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
-
+  // The status panel keeps only what matters for the course: who is where, and how it ended.
   function updatePanel() {
     const m = S.metrics, p = S.cur;
     if (!m) return;
-    let waiting = 0, walking = 0, riding = 0, unaware = 0;
+    let waiting = 0, walking = 0, riding = 0;
     for (let i = 0; i < p.length; i += 6) {
       const s = p[i + 3];
       if (s === ST.WAITING_RIDE) waiting++;
       else if (s === ST.WALKING) walking++;
       else if (s === ST.RIDING) riding++;
-      else if (s === ST.UNAWARE) unaware++;
     }
-    const bedsUsed = S.beds.reduce((a, b) => a + b, 0), bedsAll = S.vals.beds * S.shelterCells.length;
     const rows = [
-      ['Time (ticks)', m.ticks], ['In the town', m.people], ['Told to evacuate', m.alerted], ['Not in danger', unaware],
-      ['Waiting for ambulance', waiting], ['Walking to shelter', walking], ['In an ambulance', riding],
-      ['Safe in shelter', `${m.safe}`], ['Lost to the fire', m.lost], ['No bed / stranded', m.stranded],
-      ['Beds used', `${bedsUsed}/${bedsAll}`], ['Treated by medics', m.treated],
-      ['Vulnerable safe', `${m.vulnerableSafe}/${m.vulnerable}`], ['Avg ride wait', m.rideWait.toFixed(0)],
+      ['Time (ticks)', m.ticks, ''], ['Told to evacuate', m.alerted, ''],
+      ['Waiting for ambulance', waiting, ''], ['Walking to shelter', walking, ''],
+      ['In an ambulance', riding, ''], ['Safe in shelter', m.safe, 'good'],
+      ['Lost to the fire', m.lost, m.lost ? 'bad' : ''], ['Stranded', m.stranded, m.stranded ? 'bad' : ''],
     ];
-    $('sim-stats').innerHTML = rows.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join('');
-    const q = S.queue, el = $('sim-queue');
-    el.innerHTML = q.length === 0 ? '<div class="empty">nobody is waiting</div>'
-      : Array.from({ length: q.length / 4 }, (_, i) => {
-        const kind = K[q[i * 4 + 1]];
-        return `<div><i style="background:${kind.color}"></i><span>#${q[i * 4]} ${kind.name}</span><b>${q[i * 4 + 2]}</b><span>${q[i * 4 + 3]}t</span></div>`;
-      }).join('');
+    $('sim-stats').innerHTML = rows.map(([k, v, c]) => `<div class="${c}">${k}<b>${v}</b></div>`).join('');
+
+    // the ambulance queue, in the order the priority queue will serve it
+    const q = S.queue, rowsQ = [];
+    for (let i = 0; i < Math.min(6, q.length / 4); i++) {
+      const kind = K[q[i * 4 + 1]];
+      rowsQ.push(`<div class="qrow${i === 0 ? ' first' : ''}"><span class="rank">${i + 1}</span><i style="background:${kind.color}"></i>` +
+        `<span>${kind.name} #${q[i * 4]}</span><span class="pts">${q[i * 4 + 2]}</span><span class="wait">${q[i * 4 + 3]}t</span></div>`);
+    }
+    $('sim-qcount').textContent = waiting ? `· ${waiting} waiting` : '';
+    $('sim-queue').innerHTML = rowsQ.length
+      ? `<div class="qhead"><span>#</span><span></span><span>${$('sim-priority').checked ? 'next to be picked up' : 'first come, first served'}</span><span>points</span><span>waited</span></div>` + rowsQ.join('')
+      : '<div class="empty">Nobody is waiting for an ambulance.</div>';
+
     $('sim-hint').innerHTML = S.phase === 'done'
-      ? `Fire over after ${m.ticks} ticks: <b>${m.safe}</b> safe, <b>${m.lost}</b> lost, <b>${m.stranded}</b> stranded (no bed or no road).`
-      : 'Click a building to start the fire there (or press <b>Random fire</b>). Only people near the fire are evacuated.';
+      ? `Finished after ${m.ticks} ticks: <b>${m.safe}</b> safe, <b>${m.lost}</b> lost, <b>${m.stranded}</b> stranded (no bed or no road). Press <b>Reset</b> for a new crowd.`
+      : S.phase === 'ready'
+        ? 'Click anywhere on the map to place the fire, then press <b>Start</b>. Only people near it are evacuated.'
+        : 'The dashed ring is the evacuation zone. People with a ! are waiting for an ambulance.';
   }
 
   // ------------------------------------------------------------------ comparing the two policies
@@ -210,16 +176,14 @@
     }
     rebuild();
     const [a, b] = out, f = (x) => x.toFixed(0);
-    const row = (label, x, y, lowerBetter, fmt) => {
+    const row = (label, x, y, lowerBetter) => {
       const better = x === y ? 0 : (x < y) === lowerBetter ? 1 : 2;
-      return `<tr><td>${label}</td><td class="${better === 1 ? 'win' : ''}">${fmt(x)}</td><td class="${better === 2 ? 'win' : ''}">${fmt(y)}</td></tr>`;
+      return `<tr><td>${label}</td><td class="${better === 1 ? 'win' : ''}">${f(x)}</td><td class="${better === 2 ? 'win' : ''}">${f(y)}</td></tr>`;
     };
-    $('sim-compare-out').innerHTML = `<table class="cmp"><tr><th></th><th>Priority queue</th><th>First come first served</th></tr>` +
-      row('Safe', a.safe, b.safe, false, f) + row('Lost to fire', a.lost, b.lost, true, f) + row('Stranded', a.stranded, b.stranded, true, f) +
-      row('Vulnerable safe', a.vulnerableSafe, b.vulnerableSafe, false, f) +
-      row('Urgent ride wait', a.urgentWait, b.urgentWait, true, f) + row('Avg ride wait', a.rideWait, b.rideWait, true, f) +
-      row('Treatment wait', a.treatWait, b.treatWait, true, f) + row('Finished at tick', a.ticks, b.ticks, true, f) + '</table>' +
-      '<p class="hint">Urgent = injured, wheelchair, pregnant. Same people, same fire, same seed; only the waiting line differs.</p>';
+    $('sim-compare-out').innerHTML = `<table class="cmp"><tr><th></th><th>Priority queue</th><th>Plain queue</th></tr>` +
+      row('Safe', a.safe, b.safe, false) + row('Lost to the fire', a.lost, b.lost, true) + row('Stranded', a.stranded, b.stranded, true) +
+      row('Wait of injured and disabled (ticks)', a.urgentWait, b.urgentWait, true) + '</table>' +
+      '<p class="hint">Same people, same incident, same crowd. Only the waiting line differs.</p>';
   }
 
   // ------------------------------------------------------------------ drawing
@@ -248,7 +212,7 @@
       return;
     }
     const moving = dx !== 0 || dy !== 0;
-    if (v.s >= R.TILE_MIN && s !== ST.UNAWARE || v.s >= R.TILE_MIN * 1.6) {
+    if (v.s >= R.TILE_MIN && S.mode === 'physical' && !S.map.real && (s !== ST.UNAWARE || v.s >= R.TILE_MIN * 1.6)) {
       const sprite = spriteOf(c[i * 6 + 1], female, i), sheet = SN.sprites.personSheet(sprite, female || sprite === 'pregnant', i % 10);
       const dir = dy > 0 ? 0 : dy < 0 ? 1 : dx < 0 ? 2 : dx > 0 ? 3 : 0, frame = moving ? (Math.floor(now / 140) + i) % 3 : 0;
       const size = v.s * 1.15;
@@ -256,19 +220,30 @@
       ctx.drawImage(sheet[dir][frame], Math.round(px - size / 2), Math.round(py - size * 0.85), size, size);
       if (s === ST.WAITING_RIDE) ctx.drawImage(SN.sprites.bubble('!'), px - v.s * 0.45, py - v.s * 2.1, v.s * 0.9, v.s * 0.9);
     } else {
-      const r = Math.max(S.map.real ? 3.5 : 2, v.s * (s === ST.UNAWARE ? 0.32 : 0.5));
-      ctx.fillStyle = s === ST.UNAWARE ? (S.map.real ? 'rgba(40,40,60,.75)' : 'rgba(255,255,255,.55)') : kind.color;
+      const r = Math.max(S.map.real ? 4 : 2.5, v.s * (s === ST.UNAWARE ? 0.32 : 0.5));
+      ctx.fillStyle = s === ST.UNAWARE ? (S.map.real ? 'rgba(40,40,60,.75)' : 'rgba(255,255,255,.6)') : kind.color;
       ctx.strokeStyle = s === ST.WAITING_RIDE ? '#fff' : '#101820';
-      ctx.lineWidth = s === ST.WAITING_RIDE ? 2 : 1;
+      ctx.lineWidth = s === ST.WAITING_RIDE ? 2.5 : 1;
       ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
+  }
+
+  // The first people in the ambulance queue wear their place in line: 1, 2, 3.
+  function drawRank(ctx, v, id, rank, alpha) {
+    const W = S.size, [x, y] = lerpPos(S.prev[id * 6], S.cur[id * 6], alpha, W);
+    const px = v.ox + x * v.s, py = v.oy + y * v.s - Math.max(12, v.s * 1.4), r = 9;
+    ctx.fillStyle = rank === 1 ? '#f2c14e' : '#ffffff'; ctx.strokeStyle = '#101820'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#101820'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `700 12px ${R.NUM_FONT}`;
+    ctx.fillText(String(rank), px, py + 1);
   }
 
   function drawAmbulance(ctx, v, i, now, alpha) {
     const W = S.size, a = S.amb, pa = S.ambPrev;
     const [x, y, dx, dy] = lerpPos(pa[i * 3], a[i * 3], alpha, W);
     const px = v.ox + x * v.s, py = v.oy + y * v.s;
-    const size = Math.max(10, v.s * 1.7), flash = Math.floor(now / 200) % 2;
+    const size = Math.max(14, v.s * 1.7), flash = Math.floor(now / 200) % 2;
     ctx.save();
     ctx.translate(px, py);
     if (dx || dy) ctx.rotate(Math.atan2(dy, dx) + Math.PI / 2);
@@ -282,11 +257,17 @@
     if (!v) return;
     const ctx = cv.getContext('2d');
     R.drawBase(ctx, v, S.world, S.mode, now);
+    if (S.mode === 'logical') R.drawCellDetail(ctx, v, S.cost, null, 0);
 
-    // evacuation zone around the fire
+    // evacuation zone around the incident
     const [fx, fy] = R.cellCenter(v, S.fireCell);
-    ctx.strokeStyle = 'rgba(255,140,40,.9)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
-    ctx.beginPath(); ctx.arc(fx, fy, S.vals.radius * v.s, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255,140,40,.95)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.arc(fx, fy, DEFAULTS.radius * v.s, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    if (S.phase === 'ready') {                                   // a pulsing marker where the fire will start
+      const pulse = 14 + Math.sin(now / 160) * 3;
+      ctx.strokeStyle = '#ff5a1f'; ctx.fillStyle = 'rgba(255,90,31,.35)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(fx, fy, pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
 
     R.drawFlag(ctx, v, S.depot, '#e03030', '+');
     for (const c of S.shelterCells) R.drawFlag(ctx, v, c, '#48b060', 'S');
@@ -295,11 +276,27 @@
     for (let i = 0; i < n; i++) if (S.cur[i * 6 + 3] !== ST.LOST) drawPerson(ctx, v, i, now, alpha);
     for (let i = 0; i < n; i++) if (S.cur[i * 6 + 3] === ST.LOST) drawPerson(ctx, v, i, now, alpha);
     for (let i = 0; i < S.amb.length / 3; i++) drawAmbulance(ctx, v, i, now, alpha);
+    for (let r = 0; r < Math.min(3, S.queue.length / 4); r++) drawRank(ctx, v, S.queue[r * 4], r + 1, alpha);
   }
 
   // ------------------------------------------------------------------ input
+  function hover(cell) {
+    const el = $('sim-hover');
+    if (cell < 0) { el.textContent = ''; return; }
+    let text = `x ${cell % S.size}, y ${(cell / S.size) | 0} · ${SN.TERRAIN_NAMES[S.map.terrain[cell]]}`;
+    for (let i = 0; i < S.cur.length / 6; i++) {
+      if (S.cur[i * 6] === cell && S.cur[i * 6 + 3] !== ST.SAFE) {
+        const stateNames = ['at home', 'told to leave', 'waiting for an ambulance', 'walking', 'riding', 'safe', 'lost', 'stranded'];
+        text += ` · ${K[S.cur[i * 6 + 1]].name} #${i}, priority ${S.cur[i * 6 + 4]}, ${stateNames[S.cur[i * 6 + 3]]}`;
+        break;
+      }
+    }
+    el.textContent = text;
+  }
+
   function bindMap() {
-    const cv = $('sim-map'), cam = () => S.surf.cam;
+    const cv = $('sim-map');
+    S.surf.bindCamera(null);                                     // mouse wheel zooms (town); drag is handled below
     let drag = null;
     cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
     cv.addEventListener('pointermove', (e) => {
@@ -308,25 +305,20 @@
       if (drag) {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         drag.moved += Math.abs(dx) + Math.abs(dy);
-        if (drag.moved > 4) cam().panBy(dx * dpr, dy * dpr, v.s);
+        if (drag.moved > 4) S.surf.cam.panBy(dx * dpr, dy * dpr, v.s);
         drag.x = e.clientX; drag.y = e.clientY;
       }
       hover(R.cellAt(cv, v, e));
     });
     cv.addEventListener('pointerup', (e) => {
       const v = S.surf.view();
-      if (drag && drag.moved <= 4 && v) clickCell(R.cellAt(cv, v, e));
+      if (drag && drag.moved <= 4 && v) placeIncident(R.cellAt(cv, v, e));
       drag = null;
     });
     cv.addEventListener('pointerleave', () => { $('sim-hover').textContent = ''; });
-    cv.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
-      cam().zoomAt(cv.width, cv.height, (e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr, e.deltaY < 0 ? 1.25 : 0.8);
-    }, { passive: false });
-    $('sim-zoom-in').addEventListener('click', () => cam().zoomBy(1.4, cv.width, cv.height));
-    $('sim-zoom-out').addEventListener('click', () => cam().zoomBy(0.7, cv.width, cv.height));
-    $('sim-fit').addEventListener('click', () => cam().fit(S.size, S.size));
+    $('sim-zoom-in').addEventListener('click', () => S.surf.zoom(1.4));
+    $('sim-zoom-out').addEventListener('click', () => S.surf.zoom(0.7));
+    $('sim-fit').addEventListener('click', () => S.surf.home());
   }
 
   // real-map mode: Leaflet owns the mouse
@@ -336,52 +328,24 @@
     lf._simBound = true;
     const cellOf = (e) => { const v = S.surf.view(); return v ? S.surf.cellFromContainerPoint(e.containerPoint, v) : -1; };
     lf.on('mousemove', (e) => hover(cellOf(e)));
-    lf.on('click', (e) => clickCell(cellOf(e)));
-  }
-
-  function hover(cell) {
-    const el = $('sim-hover');
-    if (cell < 0) { el.textContent = ''; return; }
-    let text = `x ${cell % S.size}, y ${(cell / S.size) | 0} · ${SN.TERRAIN_NAMES[S.map.terrain[cell]]}`;
-    const W = S.size, mx = cell % W, my = (cell / W) | 0;
-    for (let i = 0; i < S.cur.length / 6; i++) {
-      const c = S.cur[i * 6];
-      if (Math.abs((c % W) - mx) <= 0 && Math.abs(((c / W) | 0) - my) <= 0 && S.cur[i * 6 + 3] !== ST.SAFE) {
-        const stateNames = ['at home', 'alerted', 'waiting for ambulance', 'walking', 'riding', 'safe', 'lost', 'stranded'];
-        text += ` · #${i} ${K[S.cur[i * 6 + 1]].name}, priority ${S.cur[i * 6 + 4]}, ${stateNames[S.cur[i * 6 + 3]]}`;
-        break;
-      }
-    }
-    el.textContent = text;
-  }
-
-  function clickCell(cell) {
-    if (cell < 0 || S.phase !== 'ready' || S.map.terrain[cell] !== T.BUILDING) return;
-    const b = S.map.buildings[S.map.bid[cell]];
-    if (!b || b.kind !== 'house') { $('sim-hint').textContent = 'The fire has to start in an ordinary house, not the hospital or a shelter.'; return; }
-    setFireBuilding(b);
+    lf.on('click', (e) => placeIncident(cellOf(e)));
   }
 
   function bindPanel() {
     $('sim-play').addEventListener('click', () => {
-      if (S.phase === 'done') rebuild();                       // run again from tick 0
+      if (S.phase === 'done') rebuild();                         // run again from tick 0
       if (S.phase === 'running') { S.phase = 'paused'; $('sim-play').textContent = '▶ Resume'; }
-      else { S.phase = 'running'; $('sim-play').textContent = '⏸ Pause'; }
+      else { S.phase = 'running'; $('sim-play').textContent = '⏸ Pause'; updatePanel(); }
     });
     $('sim-step').addEventListener('click', () => {
       if (S.phase === 'done') return;
       S.phase = 'paused'; $('sim-play').textContent = '▶ Resume';
       tick();
     });
-    $('sim-reset').addEventListener('click', rebuild);
+    $('sim-reset').addEventListener('click', () => { S.seed = 1 + Math.floor(Math.random() * 98); rebuild(); });   // a new crowd
     $('sim-speed').addEventListener('input', (e) => { S.speed = Math.pow(10, +e.target.value); $('sim-speed-v').textContent = S.speed.toFixed(1) + '×'; });
     $('sim-speed').dispatchEvent(new Event('input'));
     $('sim-priority').addEventListener('change', rebuild);
-    $('sim-newmap').addEventListener('click', () => newMap());
-    $('sim-randfire').addEventListener('click', () => {
-      const houses = S.map.buildings.slice(1).filter((b) => b.kind === 'house');
-      setFireBuilding(houses[Math.floor(Math.random() * houses.length)]);
-    });
     $('sim-compare').addEventListener('click', compare);
     document.querySelectorAll('.view-toggle[data-for=sim]').forEach((g) => g.addEventListener('click', (e) => {
       const b = e.target.closest('button');
@@ -397,10 +361,9 @@
     open() {
       if (started) return;
       started = true;
-      S.surf = new SN.stage.Surface($('sim-map'), $('sim-lf'), true);
-      buildControls(); bindMap(); bindPanel();
+      S.surf = new SN.stage.Surface($('sim-map'), $('sim-lf'));
+      buildOrder(); bindMap(); bindPanel();
       newMap();
-      sizeOptions();
     },
     // the mode switch (pixel town <-> real map) changed
     onMode() {
@@ -408,8 +371,7 @@
       S.phase = 'ready';
       $('sim-play').textContent = '▶ Start';
       S.surf.destroyLeaflet();
-      sizeOptions();
-      if (!SN.stage.real) S.size = +$('sim-size').value;
+      S.size = TOWN_SIZE;
       newMap();
     },
     frame(now) {

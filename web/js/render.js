@@ -1,9 +1,14 @@
 // Drawing helpers shared by the Path Finder and the Disaster Sim.
 //   Physical view: FireRed-style tiles when zoomed in, a 1-pixel-per-cell overview when zoomed out.
-//   Logical view : the cost grid (light = cheap, dark = expensive, black = blocked).
+//   Logical view : the cost grid (light = cheap, dark = expensive, black = blocked), with the grid boxes,
+//                  and when zoomed in the cost of every cell and the order in which a search expanded it.
 (function (SN) {
   'use strict';
-  const TILE_MIN = 9;   // device pixels per cell from which the tile art is used
+  const TILE_MIN = 9;      // device pixels per cell from which the tile art is used
+  const LINES_MIN = 7;     // Logical view: grid lines from here
+  const COST_MIN = 22;     // Logical view: the cost of each cell from here
+  const ORDER_MIN = 30;    // Logical view: expansion order numbers from here
+  const NUM_FONT = 'system-ui, "Segoe UI", Roboto, Arial, sans-serif';
 
   // The mapping from cells to canvas pixels: s device pixels per cell, (ox, oy) = where cell (0,0) starts.
   function makeView(cw, ch, W, H, s, ox, oy) {
@@ -39,6 +44,53 @@
     }
   }
 
+  // ---- Logical view details ------------------------------------------------------------------------------
+
+  // The boxes of the grid.
+  function drawGridLines(ctx, v) {
+    ctx.strokeStyle = 'rgba(20, 30, 55, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const top = Math.max(0, v.oy + v.y0 * v.s), bottom = Math.min(v.ch, v.oy + (v.y1 + 1) * v.s);
+    const left = Math.max(0, v.ox + v.x0 * v.s), right = Math.min(v.cw, v.ox + (v.x1 + 1) * v.s);
+    for (let x = v.x0; x <= v.x1 + 1; x++) { const px = Math.round(v.ox + x * v.s) + 0.5; ctx.moveTo(px, top); ctx.lineTo(px, bottom); }
+    for (let y = v.y0; y <= v.y1 + 1; y++) { const py = Math.round(v.oy + y * v.s) + 0.5; ctx.moveTo(left, py); ctx.lineTo(right, py); }
+    ctx.stroke();
+  }
+
+  function outlined(ctx, text, x, y, size, fill, weight) {
+    ctx.font = `${weight || 600} ${size}px ${NUM_FONT}`;
+    ctx.lineWidth = Math.max(2, size / 5);
+    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = fill;
+    ctx.fillText(text, x, y);
+  }
+
+  // Grid boxes, then (zoomed in) the step cost of every cell and, for a search, the number of the step
+  // at which it was expanded. cost: Uint8Array. first[cell] = step of first expansion (or -1); cursor = steps so far.
+  function drawCellDetail(ctx, v, cost, first, cursor) {
+    if (v.s < LINES_MIN) return;
+    drawGridLines(ctx, v);
+    if (v.s < COST_MIN) return;
+    const cs = Math.min(14, v.s * 0.27), os = Math.min(22, v.s * 0.4);
+    for (let y = v.y0; y <= v.y1; y++) {
+      for (let x = v.x0; x <= v.x1; x++) {
+        const c = y * v.W + x, px = v.ox + x * v.s, py = v.oy + y * v.s;
+        if (!cost[c]) continue;
+        ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+        outlined(ctx, String(cost[c]), px + v.s - 3, py + v.s - 2, cs, '#3b4d68', 500);
+        if (first && v.s >= ORDER_MIN && first[c] >= 0 && first[c] < cursor) {
+          const label = String(first[c] + 1);
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          outlined(ctx, label, px + v.s / 2, py + v.s * 0.42, Math.min(os, (v.s * 0.9) / Math.max(2, label.length * 0.62)), '#0d2748', 700);
+        }
+      }
+    }
+  }
+
+  // ---- markers -----------------------------------------------------------------------------------------
+
   function cellCenter(v, cell) {
     return [v.ox + (cell % v.W + 0.5) * v.s, v.oy + (((cell / v.W) | 0) + 0.5) * v.s];
   }
@@ -62,7 +114,7 @@
     ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.round(r * 1.05)}px "Pixelify Sans", monospace`;
+    ctx.font = `700 ${Math.round(r * 1.05)}px ${NUM_FONT}`;
     ctx.fillText(text, x, y + 1);
   }
 
@@ -93,5 +145,5 @@
     return x < 0 || y < 0 || x >= v.W || y >= v.H ? -1 : y * v.W + x;
   }
 
-  SN.render = { makeView, drawBase, drawPath, drawFlag, drawHead, cellCenter, fitCanvas, cellAt, TILE_MIN };
+  SN.render = { makeView, drawBase, drawCellDetail, drawPath, drawFlag, drawHead, cellCenter, fitCanvas, cellAt, TILE_MIN, NUM_FONT };
 })(globalThis.SN = globalThis.SN || {});

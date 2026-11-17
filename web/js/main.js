@@ -35,7 +35,16 @@
     label.classList.remove('busy');
   }
 
+  // light / dark theme (remembered in the browser)
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    $('theme-btn').textContent = t === 'dark' ? '☀' : '☾';
+    try { localStorage.setItem('sn-theme', t); } catch (e) { /* storage blocked: the theme just is not remembered */ }
+  }
+
   async function boot() {
+    $('theme-btn').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☾';
+    $('theme-btn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
     try {
       if (typeof createEngine !== 'function') throw new Error('engine/engine.js is missing. Build it with backend/build.sh wasm (see the README).');
       await SN.engine.load(createEngine);

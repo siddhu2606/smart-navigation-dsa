@@ -22,13 +22,13 @@
 
   const ALGOS = [
     { id: 0, name: 'BFS', color: [78, 121, 167], css: '#4e79a7', long: 'Breadth-First Search',
-      how: 'Queue. Explores in rings, ignores costs. Fewest steps.' },
+      ds: 'QUEUE (FIFO)', how: 'Explores in rings around the start and ignores the cell costs, so it finds the route with the fewest steps.' },
     { id: 1, name: 'DFS', color: [225, 87, 89], css: '#e15759', long: 'Depth-First Search',
-      how: 'Stack. Dives deep, backtracks. Finds a path, not a good one.' },
+      ds: 'STACK (LIFO)', how: 'Dives down one direction until it is stuck, then backtracks. It finds a route, but usually a long, winding one.' },
     { id: 2, name: 'Dijkstra', color: [89, 161, 79], css: '#59a14f', long: "Dijkstra's algorithm",
-      how: 'Priority queue on cost so far. Always the cheapest path.' },
+      ds: 'PRIORITY QUEUE by cost so far', how: 'Always expands the cheapest cell next, so it finds the cheapest route, but it spreads out in every direction.' },
     { id: 3, name: 'A*', color: [242, 142, 43], css: '#f28e2b', long: 'A* search',
-      how: 'Priority queue on cost so far + distance left. Cheapest path, fewer cells.' },
+      ds: 'PRIORITY QUEUE by cost + distance left', how: 'Like Dijkstra, but it also guesses the distance still to go, so it heads for the goal and expands far fewer cells.' },
   ];
 
   // The four priority groups, in the same order as enum Kind in backend/sim.h.

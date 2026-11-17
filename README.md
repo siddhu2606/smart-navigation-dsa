@@ -62,7 +62,7 @@ whether a route still exists and only enables *Start the race* if one does.
 
 ## Disaster Sim
 
-A fire starts in one building (click one, or *Random fire*) and spreads through grass, forest and buildings. People
+A fire starts **where you click on the map** (any land, not only a building) and spreads through grass, forest and buildings, but never further than a fixed radius from where it started. People
 within the evacuation radius are told to leave. **Everyone else stays home.**
 
 There are four groups of people (`enum Kind` in [`sim.h`](backend/sim.h)):
@@ -112,10 +112,21 @@ bed is taken, they are **stranded**.
 ordered by arrival time (first come, first served), and puts the results side by side. The priority queue picks up the
 injured and disabled sooner.
 
+## Using the page
+
+- **Map controls** (+, −, fit, scroll wheel, drag) work on every map. In the Path Finder the four race maps share one camera,
+  so they zoom and pan together.
+- **Physical / Logical** view. Logical shows the cost grid; zoom in and the grid boxes appear, then the step cost of every cell
+  and, in the race, the number of the step at which each search expanded it.
+- **Light / dark** theme with the button in the top right (remembered by the browser).
+- The Disaster Sim has no tuning knobs: the numbers of people, ambulances, medics and beds are fixed. You choose where the incident
+  is and the priority order of the four groups. The side panel shows the ambulance queue (the next people to be picked up, in order,
+  and the first three also wear 1, 2, 3 on the map) and a short status.
+
 ## Town or real map
 
 The switch in the top right changes both screens between the **pixel-art town** and a **real map of Pune** (Deccan Gymkhana and
-Shivajinagar, about 2 km × 2 km).
+Shivajinagar, about 4 km × 2 km).
 
 - **Leaflet** only draws the background and handles pan and zoom. It does no routing.
 - The streets, buildings, water, hospitals and schools come from **OpenStreetMap**. [`tools/build_pune.js`](tools/build_pune.js) turns

@@ -9,7 +9,7 @@
 
   const PF = {
     size: 100, seed: '', map: null, world: null, cost: null, start: 0, goal: 0,
-    tool: 'start', brush: 2, mode: 'physical', setup: null,
+    tool: 'start', brush: 2, mode: 'physical', setup: null, cam: new SN.Camera(),   // cam: shared by the four race maps
     painting: false, race: null,
   };
 
@@ -34,11 +34,13 @@
   // Start and goal on two doors far apart that the engine can connect.
   function pickEndpoints() {
     const rng = new SN.RNG(PF.seed + '|ends'), W = PF.size;
-    const doors = PF.map.buildings.slice(1).filter((b) => b.door >= 0 && b.door).map((b) => b.door);
+    const mid = (b) => !PF.map.real || Math.hypot(b.x - W / 2, b.y - W / 2) < W * 0.28;   // real map: near the middle
+    const doors = PF.map.buildings.slice(1).filter((b) => b.door >= 0 && b.door && mid(b)).map((b) => b.door);
+    const want = PF.map.real ? 0.35 : 0.7;
     for (let tries = 0; tries < 60; tries++) {
       const a = doors[rng.int(doors.length)], b = doors[rng.int(doors.length)];
       const d = Math.abs(a % W - b % W) + Math.abs(((a / W) | 0) - ((b / W) | 0));
-      if (d < W * 0.7 && tries < 50) continue;
+      if (d < W * want && tries < 50) continue;
       if (SN.engine.search(3, PF.cost, W, W, a, b).found) { PF.start = a; PF.goal = b; return; }
     }
     PF.start = doors[0]; PF.goal = doors[doors.length - 1];
@@ -70,7 +72,7 @@
     const W = PF.size;
     if (PF.tool === 'start') PF.start = nearestOpen(cell);
     else if (PF.tool === 'goal') PF.goal = nearestOpen(cell);
-    else {
+    else if (PF.tool === 'wall' || PF.tool === 'erase') {
       const changed = [], x0 = cell % W, y0 = (cell / W) | 0, r = PF.brush - 1;
       for (let y = y0 - r; y <= y0 + r; y++)
         for (let x = x0 - r; x <= x0 + r; x++) {
@@ -88,17 +90,27 @@
     }
   }
 
+  function hoverText(cell) {
+    return cell < 0 ? '' : `x ${cell % PF.size}, y ${(cell / PF.size) | 0} · ${SN.TERRAIN_NAMES[PF.map.terrain[cell]]} · cost ${PF.cost[cell] || 'blocked'}`;
+  }
+
   function bindSetup() {
     const cv = $('pf-map');
-    const view = () => PF.setup.view() || PF.setup.cam.view(cv.width, cv.height);
+    const view = () => PF.setup.view();
+    // wheel zooms; drag pans (Pan tool, or any button other than the left one)
+    PF.setup.bindCamera((e) => PF.tool === 'pan' || e.button !== 0);
     cv.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
       cv.setPointerCapture(e.pointerId);
       PF.painting = true;
-      applyTool(R.cellAt(cv, view(), e));
+      const v = view();
+      if (v) applyTool(R.cellAt(cv, v, e));
     });
     cv.addEventListener('pointermove', (e) => {
-      const cell = R.cellAt(cv, view(), e);
-      $('pf-hover').textContent = cell < 0 ? '' : `x ${cell % PF.size}, y ${(cell / PF.size) | 0} · ${SN.TERRAIN_NAMES[PF.map.terrain[cell]]} · cost ${PF.cost[cell] || 'blocked'}`;
+      const v = view();
+      if (!v) return;
+      const cell = R.cellAt(cv, v, e);
+      $('pf-hover').textContent = hoverText(cell);
       if (PF.painting) applyTool(cell);
     });
     const end = () => { if (PF.painting) { PF.painting = false; check(); } };
@@ -117,9 +129,10 @@
     $('pf-size').addEventListener('change', (e) => { PF.size = +e.target.value; newMap(); });
     $('pf-new').addEventListener('click', newMap);
     $('pf-start').addEventListener('click', startRace);
+    $('pf-zoom-in').addEventListener('click', () => PF.setup.zoom(1.4));
+    $('pf-zoom-out').addEventListener('click', () => PF.setup.zoom(0.7));
+    $('pf-fit').addEventListener('click', () => PF.setup.home());
 
-    // size options and cost legend
-    $('pf-size').innerHTML = SN.SIZES.map((s) => `<option value="${s}">${s} × ${s}</option>`).join('');
     const sw = (t, label) => { const c = SN.OVERVIEW_RGB[t]; return `<span><i style="background:rgb(${c})"></i>${label} <b>${SN.COST[t] || '✕'}</b></span>`; };
     $('pf-legend').innerHTML = [sw(T.ROAD, 'Road'), sw(T.PATH, 'Footpath'), sw(T.GRASS, 'Grass'), sw(T.FOREST, 'Forest'),
       sw(T.SHALLOW, 'Shallow'), sw(T.PLAZA, 'Plaza'), sw(T.BUILDING, 'Building'), sw(T.DEEP, 'Deep water')].join('');
@@ -130,6 +143,7 @@
     if (!v) return;
     const ctx = cv.getContext('2d');
     R.drawBase(ctx, v, PF.world, PF.mode, now);
+    if (PF.mode === 'logical') R.drawCellDetail(ctx, v, PF.cost, null, 0);
     R.drawFlag(ctx, v, PF.start, '#e04838', 'S');
     R.drawFlag(ctx, v, PF.goal, '#48b060', 'G');
   }
@@ -150,7 +164,7 @@
     lf.on('mousedown', (e) => { if (PF.tool === 'wall' || PF.tool === 'erase') { PF.painting = true; applyTool(cellOfEvent(e)); } });
     lf.on('mousemove', (e) => {
       const cell = cellOfEvent(e);
-      $('pf-hover').textContent = cell < 0 ? '' : `x ${cell % PF.size}, y ${(cell / PF.size) | 0} · ${SN.TERRAIN_NAMES[PF.map.terrain[cell]]} · cost ${PF.cost[cell] || 'blocked'}`;
+      $('pf-hover').textContent = hoverText(cell);
       if (PF.painting) applyTool(cell);
     });
     const end = () => { if (PF.painting) { PF.painting = false; check(); } };
@@ -162,33 +176,51 @@
   // ------------------------------------------------------------------ the race
   function startRace() {
     const W = PF.size, cards = $('race-cards');
+    closeRace();
     cards.innerHTML = '';
+    PF.cam.fit(W, W);
     const race = { cards: [], playing: true, speed: 1, acc: 0, firstDone: false, allDone: false };
     for (const algo of SN.ALGOS) {
       const res = SN.engine.search(algo.id, PF.cost, W, W, PF.start, PF.goal);   // run ONCE in C++, replay below
       const el = document.createElement('div');
       el.className = 'card';
-      el.innerHTML = `<div class="head"><b style="color:${algo.css}">${algo.name}</b><small>${algo.how}</small><button title="Full screen">⛶</button></div>
-        <div class="cv"><div class="lf" hidden></div><canvas></canvas></div><div class="foot"></div>`;
+      el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas></div>
+        <div class="info">
+          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span><button title="Full screen">⛶</button></div>
+          <div class="long">${algo.long}</div>
+          <span class="ds">${algo.ds}</span>
+          <p class="how">${algo.how}</p>
+          <div class="big"><span>Cells expanded</span><b>0</b></div>
+          <div class="state"></div>
+          <dl class="res" hidden></dl>
+          <div class="badges"></div>
+        </div>`;
       cards.appendChild(el);
       const over = document.createElement('canvas');
       over.width = W; over.height = W;
-      const card = { algo, res, el, cv: el.querySelector('canvas'), foot: el.querySelector('.foot'),
-        over, octx: over.getContext('2d'), img: null, cursor: 0, done: false, finishRank: 0, badges: '' };
-      card.surf = new SN.stage.Surface(card.cv, el.querySelector('.lf'), false);
+      // first[cell] = the step at which the search expanded it (for the numbers in the Logical view)
+      const first = new Int32Array(W * W).fill(-1);
+      res.order.forEach((c, i) => { if (first[c] < 0) first[c] = i; });
+      const card = { algo, res, el, first, cv: el.querySelector('canvas'), over, octx: over.getContext('2d'), img: null, dirty: null,
+        cursor: 0, done: false, finishRank: 0, badges: '', html: '',
+        num: el.querySelector('.big b'), state: el.querySelector('.state'), resBox: el.querySelector('.res'), badgeBox: el.querySelector('.badges') };
+      card.surf = new SN.stage.Surface(card.cv, el.querySelector('.lf'));
+      card.surf.cam = PF.cam;                                  // the four maps share one camera
       card.surf.attach(PF.map);
+      card.surf.bindCamera((e) => e.button === 0 || e.button === 1 || e.button === 2);
       el.querySelector('button').addEventListener('click', () => {
         if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen && el.requestFullscreen();
       });
       race.cards.push(card);
     }
     PF.race = race;
+    SN.stage.syncGroup(race.cards.map((c) => c.surf));         // real map: the four Leaflet maps move together
     resetRace();
     $('pf-setup').hidden = true;
     $('pf-race').hidden = false;
   }
 
-  function closeRace() {                                  // remove the Leaflet maps of the four cards
+  function closeRace() {                                      // remove the Leaflet maps of the four cards
     if (PF.race) for (const c of PF.race.cards) c.surf.destroyLeaflet();
   }
 
@@ -197,10 +229,12 @@
     race.playing = true; race.acc = 0; race.firstDone = false; race.allDone = false; race.finished = 0;
     $('race-play').textContent = '⏸ Pause';
     for (const c of race.cards) {
-      c.cursor = 0; c.done = false; c.finishRank = 0; c.badges = '';
+      c.cursor = 0; c.done = false; c.finishRank = 0; c.badges = ''; c.html = '';
       c.octx.clearRect(0, 0, PF.size, PF.size);
       c.img = c.octx.createImageData(PF.size, PF.size);
+      c.dirty = null;
       c.el.classList.remove('finished');
+      c.resBox.hidden = true;
     }
     banner('Race started. Every algorithm expands one cell per step, all at the same speed.', false);
   }
@@ -218,12 +252,14 @@
       if (c.done) continue;
       const cell = c.res.order[c.cursor++];
       const k = cell * 4, d = c.img.data, col = c.algo.color;
-      d[k] = col[0]; d[k + 1] = col[1]; d[k + 2] = col[2]; d[k + 3] = 210;
+      d[k] = col[0]; d[k + 1] = col[1]; d[k + 2] = col[2]; d[k + 3] = 215;
+      const x = cell % W, y = (cell / W) | 0;                  // remember what changed, to redraw only that
+      c.dirty = c.dirty ? { x0: Math.min(c.dirty.x0, x), y0: Math.min(c.dirty.y0, y), x1: Math.max(c.dirty.x1, x), y1: Math.max(c.dirty.y1, y) } : { x0: x, y0: y, x1: x, y1: y };
       if (c.cursor >= c.res.order.length) {
         c.done = true;
         c.finishRank = ++race.finished;
         c.el.classList.add('finished');
-        if (c.finishRank === 1) banner(`🏁 ${c.algo.name} reached the goal first, after ${c.cursor} expansions. The others are still searching.`, true);
+        if (c.finishRank === 1) banner(`${c.algo.name} reached the goal first, after ${c.cursor} expansions. The others are still searching.`, true);
       }
     }
     if (race.finished === race.cards.length && !race.allDone) finishRace();
@@ -261,24 +297,41 @@
   function drawCard(c, now) {
     const v = c.surf.view();
     if (!v) return;
-    c.octx.putImageData(c.img, 0, 0);
+    if (c.dirty) {                                            // copy only the changed part of the picture
+      const d = c.dirty;
+      c.octx.putImageData(c.img, 0, 0, d.x0, d.y0, d.x1 - d.x0 + 1, d.y1 - d.y0 + 1);
+      c.dirty = null;
+    }
     const ctx = c.cv.getContext('2d');
     R.drawBase(ctx, v, PF.world, PF.mode, now);
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = PF.mode === 'logical' ? 0.55 : 0.7;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(c.over, v.ox, v.oy, v.W * v.s, v.H * v.s);
     ctx.globalAlpha = 1;
-    if (c.done) R.drawPath(ctx, v, c.res.path, '#ffffff');
+    if (PF.mode === 'logical') R.drawCellDetail(ctx, v, PF.cost, c.first, c.cursor);
+    if (c.done) R.drawPath(ctx, v, c.res.path, PF.mode === 'logical' ? '#d4202a' : '#ffffff');
     else if (c.cursor > 0) R.drawHead(ctx, v, c.res.order[c.cursor - 1], now);
     R.drawFlag(ctx, v, PF.start, '#e04838', 'S');
     R.drawFlag(ctx, v, PF.goal, '#48b060', 'G');
-    const status = c.done
-      ? `✔ reached the goal · route cost <b>${c.res.cost}</b> · ${c.res.path.length - 1} steps` +
-        (PF.map.real ? ` (≈ ${Math.round((c.res.path.length - 1) * PF.map.cellMeters)} m)` : '')
-      : '⏳ searching…';
-    const html = `<span>Expanded: <b>${c.cursor}</b></span><span>${status}</span>${c.badges}`;
-    if (c.foot.dataset.html !== html) { c.foot.innerHTML = html; c.foot.dataset.html = html; }
+    updateInfo(c);
   }
+
+  // The information column of a card. Before the card finishes it shows only the live count.
+  function updateInfo(c) {
+    const html = `${c.cursor}|${c.done}|${c.badges}`;
+    if (c.html === html) return;
+    c.html = html;
+    c.num.textContent = c.cursor.toLocaleString('en');
+    if (!c.done) { c.state.textContent = '⏳ searching…'; return; }
+    c.state.textContent = '✔ reached the goal';
+    const steps = c.res.path.length - 1;
+    c.resBox.hidden = false;
+    c.resBox.innerHTML = `<dt>Route cost</dt><dd>${c.res.cost}</dd><dt>Route steps</dt><dd>${steps}</dd>` +
+      (PF.map.real ? `<dt>Distance</dt><dd>≈ ${Math.round(steps * PF.map.cellMeters)} m</dd>` : '');
+    c.badgeBox.innerHTML = c.badges;
+  }
+
+  function leaderSurface() { return PF.race && PF.race.cards[0].surf; }
 
   function bindRace() {
     $('race-play').addEventListener('click', () => {
@@ -303,6 +356,11 @@
       $('pf-race').hidden = true;
       $('pf-setup').hidden = false;
     });
+    $('race-zoom-in').addEventListener('click', () => leaderSurface().zoom(1.4));
+    $('race-zoom-out').addEventListener('click', () => leaderSurface().zoom(0.7));
+    $('race-fit').addEventListener('click', () => {
+      if (SN.stage.real) PF.race.cards.forEach((c) => c.surf.home()); else PF.cam.fit(PF.size, PF.size);
+    });
   }
 
   function bindViewToggles() {
@@ -321,8 +379,11 @@
   function sizeOptions() {
     const sel = $('pf-size');
     if (SN.stage.real) { sel.innerHTML = `<option>Pune · ${SN.stage.pune.W} × ${SN.stage.pune.H}</option>`; sel.disabled = true; }
-    else { if (!SN.SIZES.includes(PF.size)) PF.size = 100;      // coming back from the 300 x 300 Pune grid
-      sel.innerHTML = SN.SIZES.map((s) => `<option value="${s}">${s} × ${s}</option>`).join(''); sel.value = String(PF.size); sel.disabled = false; }
+    else {
+      if (!SN.SIZES.includes(PF.size)) PF.size = 100;          // coming back from the big Pune grid
+      sel.innerHTML = SN.SIZES.map((s) => `<option value="${s}">${s} × ${s}</option>`).join('');
+      sel.value = String(PF.size); sel.disabled = false;
+    }
     $('pf-new').title = SN.stage.real ? 'New start and goal' : 'Generate a new town';
   }
 
@@ -341,8 +402,9 @@
   let last = 0;
   SN.pathfinder = {
     init() {
-      PF.setup = new SN.stage.Surface($('pf-map'), $('pf-lf'), true);
+      PF.setup = new SN.stage.Surface($('pf-map'), $('pf-lf'));
       bindSetup(); bindRace(); bindViewToggles();
+      sizeOptions();
       newMap();
       $('race-speed-v').textContent = '1×';
     },

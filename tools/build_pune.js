@@ -1,13 +1,13 @@
 // One-time tool: turns raw OpenStreetMap data (Overpass JSON, "out geom") into the same kind of grid the
 // town generator makes, so every algorithm and the simulation run on it unchanged.
 //   node tools/build_pune.js raw.json web/data/pune.json
-// Cells are about 7 m wide. Roads cost 1, footpaths 2, open ground 6; buildings and deep water are blocked.
+// 600 x 600 cells, about 7 m wide (a 4.2 km square). Roads cost 1, footpaths 2, open ground 6; buildings and deep water are blocked.
 const fs = require('fs');
 const [raw, out] = process.argv.slice(2);
 const osm = JSON.parse(fs.readFileSync(raw, 'utf8')).elements;
 
-const BBOX = { s: 18.5095, w: 73.83805, n: 18.5285, e: 73.85795 };
-const W = 300, H = 300;
+const BBOX = { s: 18.5000, w: 73.8281, n: 18.5380, e: 73.8679 };
+const W = 600, H = 600;
 const T = { GRASS: 0, ROAD: 1, BRIDGE: 2, DEEP: 7, BUILDING: 8, PATH: 14 };
 const terrain = new Uint8Array(W * H), bid = new Uint16Array(W * H);
 const toXY = (p) => [((p.lon - BBOX.w) / (BBOX.e - BBOX.w)) * W, ((BBOX.n - p.lat) / (BBOX.n - BBOX.s)) * H];
