@@ -154,11 +154,11 @@
     const D = [[1, 0], [0, 1], [-1, 0], [0, -1]], TURN = 9;
     const stepCost = (t) => (isRoad(t) ? 0.4 : t === T.FOREST ? 2.5 : t === T.SHALLOW ? 16 : t === T.DEEP ? 22 : t === T.SAND ? 1.5 : 1);
     const S = W * H * 4, g = new Float64Array(S).fill(Infinity), par = new Int32Array(S).fill(-1);
-    const heap = new RouteHeap(), goal = b.y * W + b.x;
+    const queue = new RoadQueue(), goal = b.y * W + b.x;
     const h = (c) => Math.abs(c % W - b.x) + Math.abs(((c / W) | 0) - b.y);
-    for (let d = 0; d < 4; d++) { const s = (a.y * W + a.x) * 4 + d; g[s] = 0; heap.push(s, h(a.y * W + a.x)); }
-    while (heap.size) {
-      const st = heap.pop(), c = st >> 2, d = st & 3;
+    for (let d = 0; d < 4; d++) { const s = (a.y * W + a.x) * 4 + d; g[s] = 0; queue.push(s, h(a.y * W + a.x)); }
+    while (queue.size) {
+      const st = queue.pop(), c = st >> 2, d = st & 3;
       if (c === goal) return unwind(par, st);
       const x = c % W, y = (c / W) | 0;
       for (let nd = 0; nd < 4; nd++) {
@@ -166,7 +166,7 @@
         const nx = x + D[nd][0], ny = y + D[nd][1];
         if (nx < 2 || ny < 2 || nx >= W - 2 || ny >= H - 2) continue;
         const nc = ny * W + nx, ns = nc * 4 + nd, ng = g[st] + stepCost(terrain[nc]) + (nd !== d ? TURN : 0);
-        if (ng < g[ns]) { g[ns] = ng; par[ns] = st; heap.push(ns, ng + h(nc)); }
+        if (ng < g[ns]) { g[ns] = ng; par[ns] = st; queue.push(ns, ng + h(nc)); }
       }
     }
     return [];
@@ -293,13 +293,21 @@
     return null;
   }
 
-  class RouteHeap {
-    constructor() { this.a = []; }
-    get size() { return this.a.length; }
-    push(id, k) { const a = this.a; a.push([k, id]); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (a[p][0] <= a[i][0]) break; [a[p], a[i]] = [a[i], a[p]]; i = p; } }
-    pop() { const a = this.a, top = a[0], last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && a[l][0] < a[m][0]) m = l; if (r < a.length && a[r][0] < a[m][0]) m = r; if (m === i) break; [a[m], a[i]] = [a[i], a[m]]; i = m; } } return top[1]; }
+  // A tiny priority queue for laying out roads: one bucket per key (key * 10, rounded), smallest bucket first.
+  class RoadQueue {
+    constructor() { this.buckets = []; this.cur = 0; this.size = 0; }
+    push(id, key) {
+      const b = Math.max(0, Math.round(key * 10));
+      (this.buckets[b] = this.buckets[b] || []).push(id);
+      if (b < this.cur) this.cur = b;
+      this.size++;
+    }
+    pop() {
+      while (!(this.buckets[this.cur] && this.buckets[this.cur].length)) this.cur++;
+      this.size--;
+      return this.buckets[this.cur].pop();
+    }
   }
-
 
   // cost per cell for the C++ engine (0 = blocked)
   function costArray(terrain) {
