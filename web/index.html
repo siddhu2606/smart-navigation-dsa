@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Navigation: Path Finder and Disaster Sim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">◆</span> SMART NAV <small>Dynamic Disaster Response</small></div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="path">Path Finder</button>
+    <button class="tab" data-tab="sim">Disaster Sim</button>
+  </nav>
+  <div class="pill" id="engine-pill">loading C++ engine…</div>
+</header>
+
+<div id="boot" class="boot">Loading the C++ engine (WebAssembly)…</div>
+
+<!-- ===================================================== PATH FINDER ===================================================== -->
+<main id="tab-path" class="page" hidden>
+  <section id="pf-setup" class="split">
+    <div class="map-box"><canvas id="pf-map"></canvas><div class="hover" id="pf-hover"></div></div>
+    <aside class="side box">
+      <h2>1 · Map</h2>
+      <div class="row">
+        <label>Size <select id="pf-size"></select></label>
+        <button id="pf-new">New map</button>
+      </div>
+      <h2>2 · Place the points</h2>
+      <p class="hint">Pick a tool, then click (or drag) on the map.</p>
+      <div class="tools" id="pf-tools">
+        <button class="tool active" data-tool="start"><span class="dot s">S</span> Start</button>
+        <button class="tool" data-tool="goal"><span class="dot g">G</span> Goal</button>
+        <button class="tool" data-tool="wall">▦ Wall</button>
+        <button class="tool" data-tool="erase">⌫ Erase</button>
+      </div>
+      <label class="row">Brush <input type="range" id="pf-brush" min="1" max="8" value="2"> <b id="pf-brush-v">2</b></label>
+      <div class="status" id="pf-status"></div>
+      <button class="go" id="pf-start" disabled>▶ Start the race</button>
+      <h2>Step costs</h2>
+      <div class="legend" id="pf-legend"></div>
+      <div class="view-toggle" data-for="pf"><button class="active" data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
+    </aside>
+  </section>
+
+  <section id="pf-race" hidden>
+    <div class="bar box">
+      <button class="go" id="race-play">⏸ Pause</button>
+      <button id="race-step" title="Every search expands exactly one cell">Step</button>
+      <label>Speed <input type="range" id="race-speed" min="-1.5" max="1.5" step="0.05" value="0"> <b id="race-speed-v">1×</b></label>
+      <button id="race-reset">↺ Reset</button>
+      <button id="race-edit">✎ Edit map</button>
+      <div class="view-toggle" data-for="race"><button class="active" data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
+    </div>
+    <div class="banner box" id="race-banner">Ready. Every algorithm gets the same number of steps per second.</div>
+    <div class="cards" id="race-cards"></div>
+  </section>
+</main>
+
+<!-- ===================================================== DISASTER SIM ===================================================== -->
+<main id="tab-sim" class="page" hidden>
+  <section class="split">
+    <div class="map-box"><canvas id="sim-map"></canvas>
+      <div class="map-tools">
+        <button id="sim-zoom-in">+</button><button id="sim-zoom-out">−</button><button id="sim-fit">⤢</button>
+      </div>
+      <div class="hover" id="sim-hover"></div>
+    </div>
+    <aside class="side box" id="sim-side">
+      <div class="bar-row">
+        <button class="go" id="sim-play">▶ Start</button>
+        <button id="sim-step">Step</button>
+        <button id="sim-reset">↺ Reset</button>
+      </div>
+      <label class="row">Speed <input type="range" id="sim-speed" min="-1" max="1.6" step="0.05" value="0.3"> <b id="sim-speed-v"></b></label>
+      <div class="view-toggle" data-for="sim"><button class="active" data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
+      <p class="hint" id="sim-hint">Click a building to start the fire there (or press <b>Random fire</b>). Only people near the fire are evacuated.</p>
+
+      <details open><summary>Scenario</summary>
+        <div class="sliders" id="sim-scenario"></div>
+        <div class="row"><button id="sim-newmap">New map</button><button id="sim-randfire">Random fire</button></div>
+      </details>
+      <details open><summary>Priority weights (priority queue)</summary>
+        <div class="sliders" id="sim-weights"></div>
+        <label class="check"><input type="checkbox" id="sim-priority" checked> Use the priority queue (off = first come, first served)</label>
+      </details>
+      <details open><summary>Live</summary>
+        <div class="stats" id="sim-stats"></div>
+        <h3>Ambulance line (next to be picked up)</h3>
+        <div id="sim-queue" class="queue"></div>
+      </details>
+      <details open><summary>Compare policies</summary>
+        <button id="sim-compare">Run both on this scenario</button>
+        <div id="sim-compare-out"></div>
+      </details>
+    </aside>
+  </section>
+</main>
+
+<script src="engine/engine.js"></script>
+<script src="js/config.js"></script>
+<script src="js/rng.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/mapgen.js"></script>
+<script src="js/world.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/render.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/pathfinder.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
