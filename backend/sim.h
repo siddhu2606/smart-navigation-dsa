@@ -5,7 +5,7 @@
 //     shelter beds (limited)
 //     medics      (treat people after they arrive)
 // Each resource has a waiting line implemented with std::priority_queue. The most vulnerable person
-// (injured, wheelchair, pregnant, elderly, child...) is served first. Setting usePriority = false turns
+// (injured, disabled, dependents...) is served first. Setting usePriority = false turns
 // the same line into a plain first-come-first-served queue, so the two policies can be compared.
 #pragma once
 #include <vector>
@@ -14,7 +14,10 @@
 #include "grid.h"
 using namespace std;
 
-enum Kind { ADULT, CHILD, ELDERLY, PREGNANT, WHEELCHAIR, VISUAL, INJURED, KIND_COUNT };
+// Four groups of people. ADULT walks to the shelter by themselves; the other three need an ambulance.
+//   DEPENDENT = children, elderly and pregnant women      DISABLED = wheelchair users, visually impaired
+//   INJURED   = hurt people who also need a medic
+enum Kind { ADULT, DEPENDENT, DISABLED, INJURED, KIND_COUNT };
 enum State { UNAWARE, ALERTED, WAITING_RIDE, WALKING, RIDING, SAFE, LOST, STRANDED };
 
 struct SimParams {
@@ -26,7 +29,7 @@ struct SimParams {
     int fireEvery = 6;                     // the fire tries to spread once every this many ticks
     int seed = 1;
     bool usePriority = true;               // false = first come, first served
-    int basePriority[KIND_COUNT] = {10, 60, 70, 80, 90, 50, 100};   // by Kind
+    int basePriority[KIND_COUNT] = {10, 40, 70, 100};   // by Kind (the page lets you drag the groups into order)
     int femaleBonus = 0;                   // extra points for women (0 = gender is ignored)
     int aging = 1;                         // extra points per tick spent waiting (so nobody waits forever)
 };

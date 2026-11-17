@@ -69,7 +69,7 @@ static void snapshot() {
 }
 
 // params: people, ambulances, medics, bedsPerShelter, alertRadius, fireEvery, seed, usePriority,
-//         7 base priorities (ADULT, CHILD, ELDERLY, PREGNANT, WHEELCHAIR, VISUAL, INJURED), femaleBonus, aging
+//         4 base priorities (ADULT, DEPENDENT, DISABLED, INJURED), femaleBonus, aging
 API int sn_sim_init(const unsigned char* terrain, const unsigned char* cost, int W, int H,
                     const int* doors, int nDoors, const int* shelters, int nShelters,
                     int depot, int fireCell, const int* params) {

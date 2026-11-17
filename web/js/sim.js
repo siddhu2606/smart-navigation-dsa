@@ -13,6 +13,7 @@
     speed: 2, acc: 0, fireApplied: false,
     cur: null, prev: null, amb: null, ambPrev: null, queue: [], beds: [], metrics: null,
     vals: {},                             // slider values by id
+    order: SN.DEFAULT_ORDER.slice(),      // kinds, most urgent first (the page lets you drag them)
   };
 
   const SCENARIO = [
@@ -24,8 +25,8 @@
     { id: 'fireEvery', label: 'Fire spread (ticks)', min: 2, max: 20, val: 6 },
     { id: 'seed', label: 'Population seed', min: 1, max: 99, val: 1 },
   ];
-  const WEIGHTS = K.map((k, i) => ({ id: 'w' + i, label: k.name, min: 0, max: 100, val: k.base }))
-    .concat([{ id: 'female', label: 'Women (bonus)', min: 0, max: 50, val: 0 }, { id: 'aging', label: 'Aging per tick', min: 0, max: 5, val: 1 }]);
+  const WEIGHTS = [{ id: 'female', label: 'Women (bonus)', min: 0, max: 50, val: 0 }, { id: 'aging', label: 'Aging per tick', min: 0, max: 5, val: 1 }];
+  const BASES = [100, 70, 40, 10];          // priority points for rank 1, 2, 3, 4
 
   // ------------------------------------------------------------------ building the scenario
   function newMap(keepSeed) {
@@ -53,7 +54,7 @@
   function params(priority) {
     const v = S.vals;
     return { people: v.people, ambulances: v.ambulances, medics: v.medics, beds: v.beds, radius: v.radius,
-      fireEvery: v.fireEvery, seed: v.seed, priority, base: K.map((k, i) => v['w' + i]), female: v.female, aging: v.aging };
+      fireEvery: v.fireEvery, seed: v.seed, priority, base: K.map((k, i) => BASES[S.order.indexOf(i)]), female: v.female, aging: v.aging };
   }
 
   function resetTerrain() {
@@ -117,11 +118,36 @@
     };
     make(SCENARIO, $('sim-scenario'));
     make(WEIGHTS, $('sim-weights'));
+    buildOrder();
     const sel = document.createElement('label');
     sel.innerHTML = 'Map size <select id="sim-size">' + [100, 150, 200].map((s) => `<option value="${s}">${s} × ${s}</option>`).join('') + '</select>';
     sel.style.cssText = 'display:flex;gap:10px;align-items:center;font-size:13px';
     $('sim-scenario').prepend(sel);
     $('sim-size').addEventListener('change', (e) => { S.size = +e.target.value; newMap(); });
+  }
+
+  // The priority order: drag a group up or down (or use the arrows). The top group is served first.
+  function buildOrder() {
+    const ul = $('sim-order');
+    ul.innerHTML = S.order.map((k, rank) => `<li draggable="true" data-kind="${k}"><span class="grip">⋮⋮</span>
+      <i style="background:${K[k].color}"></i><span class="nm"><b>${rank + 1}. ${K[k].name}</b><small>${K[k].note}</small></span>
+      <span class="pts">${BASES[rank]}</span><button data-up>▲</button><button data-down>▼</button></li>`).join('');
+    let from = -1;
+    ul.querySelectorAll('li').forEach((li, idx) => {
+      li.addEventListener('dragstart', (e) => { from = idx; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; });
+      li.addEventListener('dragend', () => li.classList.remove('drag'));
+      li.addEventListener('dragover', (e) => { e.preventDefault(); li.classList.add('over'); });
+      li.addEventListener('dragleave', () => li.classList.remove('over'));
+      li.addEventListener('drop', (e) => { e.preventDefault(); if (from >= 0 && from !== idx) moveKind(from, idx); });
+      li.querySelector('[data-up]').addEventListener('click', () => idx > 0 && moveKind(idx, idx - 1));
+      li.querySelector('[data-down]').addEventListener('click', () => idx < S.order.length - 1 && moveKind(idx, idx + 1));
+    });
+  }
+  function moveKind(from, to) {
+    const [k] = S.order.splice(from, 1);
+    S.order.splice(to, 0, k);
+    buildOrder();
+    rebuild();
   }
 
   const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
@@ -181,7 +207,13 @@
   }
 
   // ------------------------------------------------------------------ drawing
-  const sheetKey = (k, female) => (k.sprite === 'man' && female ? 'woman' : k.sprite);
+  // which pixel-art character stands for a person of each group
+  function spriteOf(kind, female, id) {
+    if (kind === 0) return female ? 'woman' : 'man';
+    if (kind === 1) return ['child', 'elder', 'pregnant'][id % 3];
+    if (kind === 2) return ['wheelchair', 'visual'][id % 2];
+    return 'injured';
+  }
 
   function lerpPos(prevCell, curCell, alpha, W) {
     const px = prevCell % W, py = (prevCell / W) | 0, cx = curCell % W, cy = (curCell / W) | 0;
@@ -201,7 +233,7 @@
     }
     const moving = dx !== 0 || dy !== 0;
     if (v.s >= R.TILE_MIN && s !== ST.UNAWARE || v.s >= R.TILE_MIN * 1.6) {
-      const sheet = SN.sprites.personSheet(sheetKey(kind, female), female, i % 10);
+      const sprite = spriteOf(c[i * 6 + 1], female, i), sheet = SN.sprites.personSheet(sprite, female || sprite === 'pregnant', i % 10);
       const dir = dy > 0 ? 0 : dy < 0 ? 1 : dx < 0 ? 2 : dx > 0 ? 3 : 0, frame = moving ? (Math.floor(now / 140) + i) % 3 : 0;
       const size = v.s * 1.15;
       ctx.imageSmoothingEnabled = false;

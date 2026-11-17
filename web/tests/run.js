@@ -39,7 +39,7 @@ const ok = (cond, msg) => { checks++; if (!cond) { failed++; console.log('FAIL: 
     const houses = map.buildings.slice(1).filter((b) => b.kind === 'house' && b.door).map((b) => b.door);
     const fire = (sites.fire.y + (sites.fire.h >> 1)) * size + sites.fire.x + (sites.fire.w >> 1);
     const p = { people: 150, ambulances: 4, medics: 2, beds: 40, radius: 25, fireEvery: 6, seed: 1, priority: true,
-      base: SN.KINDS.map((k) => k.base), female: 0, aging: 1 };
+      base: [10, 40, 70, 100], female: 0, aging: 1 };
     const results = [];
     for (const priority of [true, false]) {
       engine.simInit(map, cost, houses, sites.shelters.map((b) => b.door), sites.hospital.door, fire, { ...p, priority });

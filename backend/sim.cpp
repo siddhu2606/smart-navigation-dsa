@@ -1,7 +1,7 @@
 // sim.cpp - Disaster simulation (see sim.h).
 //
 // One call of step() is one "tick". Everything moves at most one cell per tick:
-//   ambulances 2 cells per tick, adults 1 cell every 3rd tick, children and visually impaired every 5th tick.
+//   ambulances 2 cells per tick, walkers 1 cell every 3rd tick.
 #include <algorithm>
 #include "sim.h"
 #include "search.h"
@@ -42,12 +42,12 @@ Simulation::Simulation(const vector<int>& terr, const vector<int>& cost, int w, 
     bedsUsed.assign(shelters.size(), 0);
 
     // people live behind random doors; the kind is drawn from a fixed mix
-    discrete_distribution<int> mix({45, 14, 14, 6, 7, 6, 8});
+    discrete_distribution<int> mix({55, 20, 12, 13});   // ADULT, DEPENDENT, DISABLED, INJURED
     for (int i = 0; i < params.people && !doors.empty(); i++) {
         Person q;
         q.id = i;
         q.kind = mix(rng);
-        q.female = (q.kind == PREGNANT) ? true : (rng() % 2 == 0);
+        q.female = (rng() % 2 == 0);
         q.cell = doors[rng() % doors.size()];
         people.push_back(q);
     }
@@ -62,10 +62,10 @@ Simulation::Simulation(const vector<int>& terr, const vector<int>& cost, int w, 
 }
 
 bool Simulation::needsRide(int kind) const {
-    return kind == ELDERLY || kind == PREGNANT || kind == WHEELCHAIR || kind == INJURED;
+    return kind != ADULT;
 }
 bool Simulation::needsTreatment(int kind) const {
-    return kind == ELDERLY || kind == PREGNANT || kind == INJURED;
+    return kind == DEPENDENT || kind == INJURED;
 }
 
 // Priority key stored in the queues.
@@ -239,7 +239,7 @@ void Simulation::driveOneCell(Ambulance& a) {
 void Simulation::moveWalkers() {
     for (Person& p : people) {
         if (p.state != WALKING) continue;
-        int period = (p.kind == CHILD || p.kind == VISUAL) ? 5 : 3;
+        int period = 3;                                           // one cell every 3rd tick
         if ((tick + p.id) % period != 0) continue;
 
         if (p.step + 1 < (int)p.path.size()) {
@@ -300,7 +300,7 @@ void Simulation::runMedics() {
         treatQ.pop();
         Person& p = people[e.id];
         p.treatStart = tick;
-        p.treatEnd = tick + (p.kind == INJURED ? 20 : p.kind == PREGNANT ? 12 : 10);
+        p.treatEnd = tick + (p.kind == INJURED ? 20 : 10);
         inTreatment.push_back(p.id);
     }
 }
@@ -360,7 +360,7 @@ SimMetrics Simulation::metrics() const {
         if (p.treated) m.treated++;
         if (p.pickupTick >= 0) {
             rideSum += p.pickupTick - p.alertTick; rideN++;
-            if (p.kind == INJURED || p.kind == WHEELCHAIR || p.kind == PREGNANT) { urgentSum += p.pickupTick - p.alertTick; urgentN++; }
+            if (p.kind == INJURED || p.kind == DISABLED) { urgentSum += p.pickupTick - p.alertTick; urgentN++; }
         }
         if (p.treatStart >= 0) { treatSum += p.treatStart - p.safeTick; treatN++; }
     }

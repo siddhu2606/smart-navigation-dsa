@@ -82,8 +82,7 @@ void testSimInvariants() {
     }
 }
 
-// With scarce ambulances the priority queue picks up the most urgent people (injured, wheelchair,
-// pregnant) sooner than a plain first-come-first-served queue does.
+// With scarce ambulances the priority queue picks up the most urgent people (injured and disabled) sooner than a plain first-come-first-served queue does.
 void testPriorityHelps() {
     City c = makeToyCity(8, 8);
     double wait[2] = {0, 0};

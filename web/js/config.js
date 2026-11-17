@@ -31,16 +31,15 @@
       how: 'Priority queue on cost so far + distance left. Cheapest path, fewer cells.' },
   ];
 
-  // Evacuee kinds, in the same order as enum Kind in backend/sim.h
+  // The four priority groups, in the same order as enum Kind in backend/sim.h.
   const KINDS = [
-    { name: 'Adult', color: '#3b6fd8', sprite: 'man', base: 10, ride: false },
-    { name: 'Child', color: '#f0b030', sprite: 'child', base: 60, ride: false },
-    { name: 'Elderly', color: '#8a6ac8', sprite: 'elder', base: 70, ride: true },
-    { name: 'Pregnant', color: '#f070b0', sprite: 'pregnant', base: 80, ride: true },
-    { name: 'Wheelchair', color: '#58a858', sprite: 'wheelchair', base: 90, ride: true },
-    { name: 'Visually impaired', color: '#40a0a0', sprite: 'visual', base: 50, ride: false },
-    { name: 'Injured', color: '#c84838', sprite: 'injured', base: 100, ride: true },
+    { name: 'Adults', note: 'walk to the shelter by themselves', color: '#3b6fd8' },
+    { name: 'Children, elderly, pregnant', note: 'need an ambulance', color: '#f0b030' },
+    { name: 'Disabled', note: 'wheelchair, visually impaired; need an ambulance', color: '#58a858' },
+    { name: 'Injured', note: 'need an ambulance and a medic', color: '#c84838' },
   ];
+  const DEFAULT_ORDER = [3, 2, 1, 0];   // most urgent first: injured, disabled, dependents, adults
+
   // person states, same order as enum State in backend/sim.h
   const STATE = { UNAWARE: 0, ALERTED: 1, WAITING_RIDE: 2, WALKING: 3, RIDING: 4, SAFE: 5, LOST: 6, STRANDED: 7 };
 
@@ -50,6 +49,7 @@
   SN.OVERVIEW_RGB = OVERVIEW_RGB;
   SN.ALGOS = ALGOS;
   SN.KINDS = KINDS;
+  SN.DEFAULT_ORDER = DEFAULT_ORDER;
   SN.STATE = STATE;
   SN.SIZES = [100, 150, 200, 300];
 })(globalThis.SN = globalThis.SN || {});
