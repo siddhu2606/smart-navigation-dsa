@@ -35,6 +35,8 @@ jobs:
         run: ./backend/build.sh wasm
       - name: Test the web page code with Node
         run: node web/tests/run.js
+      - name: Stamp the scripts and styles so browsers never show an old version
+        run: sed -i -E "s#(css/style\.css|js/[a-z]+\.js|engine/engine\.js)\"#\1?v=${GITHUB_SHA::7}\"#g" web/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
