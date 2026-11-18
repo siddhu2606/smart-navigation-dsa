@@ -184,9 +184,10 @@
       const res = SN.engine.search(algo.id, PF.cost, W, W, PF.start, PF.goal);   // run ONCE in C++, replay below
       const el = document.createElement('div');
       el.className = 'card';
-      el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas></div>
+      el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas>
+          <div class="map-tools"><button class="z-in" title="Zoom in">+</button><button class="z-out" title="Zoom out">−</button><button class="z-fit" title="Reset this map's view">⤢</button></div></div>
         <div class="info">
-          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span><button title="Full screen">⛶</button></div>
+          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span><button class="fs" title="Full screen">⛶</button></div>
           <div class="long">${algo.long}</div>
           <span class="ds">${algo.ds}</span>
           <p class="how">${algo.how}</p>
@@ -208,9 +209,14 @@
       card.surf.cam = PF.cam;                                  // the four maps share one camera
       card.surf.attach(PF.map);
       card.surf.bindCamera((e) => e.button === 0 || e.button === 1 || e.button === 2);
-      el.querySelector('button').addEventListener('click', () => {
+      const q = (k) => el.querySelector(k);
+      q('.z-in').addEventListener('click', () => card.surf.zoom(1.4));
+      q('.z-out').addEventListener('click', () => card.surf.zoom(0.7));
+      q('.z-fit').addEventListener('click', () => card.surf.home());
+      q('.fs').addEventListener('click', () => {
         if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen && el.requestFullscreen();
       });
+      el.addEventListener('fullscreenchange', () => setTimeout(() => { if (card.surf.lf) { card.surf.lf.invalidateSize(false); } }, 100));
       race.cards.push(card);
     }
     PF.race = race;
