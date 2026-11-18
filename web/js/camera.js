@@ -16,6 +16,9 @@
       this.focus = focus || null; this.fresh = !!focus; this.zoomOut = false;
     }
 
+    // Show the WHOLE map (may leave an empty margin if the panel is not square).
+    fitAll(W, H) { this.fit(W, H); this.zoomOut = true; this.z = 0; }
+
     // Screen mapping for a panel cw x ch device pixels: s = device pixels per cell.
     view(cw, ch) {
       const W = this.W, H = this.H, hi = Math.max(cw / W, ch / H), lo = Math.min(cw / W, ch / H);

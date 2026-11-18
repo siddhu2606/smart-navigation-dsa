@@ -187,6 +187,7 @@
           <div class="map-tools">
             <button class="z-in" title="Zoom in">+</button><button class="z-out" title="Zoom out">−</button>
             <button class="z-fit" title="Reset this map's view (only this map)">⟲</button>
+            <button class="z-all" title="Fit the whole map to view (only this map)">⤢</button>
             <button class="fs" title="Fit to screen (full screen)">⛶</button>
           </div>
         </div>
@@ -225,6 +226,7 @@
       q('.z-in').addEventListener('click', () => card.surf.zoom(1.4));
       q('.z-out').addEventListener('click', () => card.surf.zoom(0.7));
       q('.z-fit').addEventListener('click', () => card.surf.home());
+      q('.z-all').addEventListener('click', () => card.surf.fitAll());
       const toggleFs = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen(); };
       q('.fs').addEventListener('click', toggleFs);
       q('.f-exit').addEventListener('click', toggleFs);

@@ -113,6 +113,16 @@
       this.needsFit = false;
     }
 
+    // Show the whole grid in the panel.
+    fitAll() {
+      if (!this.lf) { this.cam.fitAll(this.map.W, this.map.H); return; }
+      const b = this.map.bbox, bounds = L.latLngBounds([b.s, b.w], [b.n, b.e]);
+      this.lf.invalidateSize(false);
+      const z = Math.floor(this.lf.getBoundsZoom(bounds, false) * 4) / 4;
+      this.lf.setMinZoom(z);
+      this.lf.setView(bounds.getCenter(), z, { animate: false });
+    }
+
     destroyLeaflet() {
       if (this.lf) { this.lf.remove(); this.lf = null; }
       this.div.hidden = true;
