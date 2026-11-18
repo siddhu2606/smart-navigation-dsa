@@ -102,43 +102,34 @@ table.cmp td.win { color: var(--ok-text); font-weight: 700; }
 .banner { font-size: 15px; padding: 7px 14px; }
 .banner.first { border-color: var(--accent); }
 .cards { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; }
-/* the map fills the whole card; the name and the numbers sit on top of it */
-.card { position: relative; min-height: 0; min-width: 0; background: var(--map-bg); border: 3px solid var(--line); border-radius: 8px; overflow: hidden; }
+.card { min-height: 0; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); background: var(--panel); border: 3px solid var(--line); border-radius: 8px; overflow: hidden; }
 .card.finished { border-color: var(--accent); }
-.card .cv { position: absolute; inset: 0; background: var(--map-bg); }
+.card .cv { position: relative; height: 100%; aspect-ratio: 1 / 1; background: var(--map-bg); }
 .card .cv canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
-.card .map-tools { flex-direction: row; right: 8px; top: 8px; }
-.card .map-tools button { width: 34px; height: 30px; padding: 0; font-size: 17px; opacity: .92; }
-.card .fsonly, .card .fsbar { display: none; }
-.card .ov { position: absolute; z-index: 5; left: 8px; background: color-mix(in srgb, var(--panel) 86%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; pointer-events: none; }
-.card .ov.top { top: 8px; display: flex; align-items: center; gap: 10px; }
-.card .nm { font: 700 22px var(--pixel); }
-.card .ds { font-size: 11px; font-weight: 700; letter-spacing: .5px; border: 1px solid var(--line); border-radius: 10px; padding: 1px 9px; color: var(--dim); }
-.card .ov.bot { bottom: 8px; display: flex; flex-direction: column; gap: 3px; max-width: calc(100% - 16px); }
-.card .big { display: flex; align-items: baseline; gap: 8px; }
+.card .info { min-width: 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.card .info .nm { font: 700 24px var(--pixel); }
+.card .info .long { color: var(--dim); font-size: 13px; margin-top: -4px; }
+.card .ds { align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: .5px; border: 1px solid var(--line); border-radius: 10px; padding: 1px 9px; color: var(--dim); }
+.card .how { margin: 0; font-size: 13px; color: var(--dim); }
+.card .big { margin-top: auto; display: flex; align-items: baseline; gap: 10px; }
 .card .big span { color: var(--dim); font-size: 13px; }
-.card .big b { font-size: 26px; line-height: 1; }
-.card .state { font-size: 13px; }
-.card dl.res { display: grid; grid-template-columns: auto auto; gap: 1px 12px; margin: 0; font-size: 13px; }
+.card .big b { font-size: 34px; line-height: 1; }
+.card .state { font-size: 14px; }
+.card dl.res { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; font-size: 14px; }
 .card dl.res[hidden] { display: none; }
 .card dl.res dt { color: var(--dim); } .card dl.res dd { margin: 0; font-weight: 700; }
-.card .badges { display: flex; gap: 6px; flex-wrap: wrap; }
-.card .badges:empty { display: none; }
+.card .badges { display: flex; gap: 6px; flex-wrap: wrap; min-height: 22px; }
 .badge { padding: 0 8px; border-radius: 10px; font-size: 12px; font-weight: 700; line-height: 20px; color: #1a1a1a; }
 .badge.first { background: #f2c14e; } .badge.best { background: #7ad98f; }
-/* full screen: the map on the left, the race controls (copied from the top bar) on the right */
-.card:fullscreen { display: grid; grid-template-columns: minmax(0, 1fr) 320px; border-radius: 0; border: 0; background: var(--panel); }
-.card:fullscreen .cv { position: relative; inset: auto; }
-.card:fullscreen .fsonly { display: block; }
-.card:fullscreen .fsbar { display: flex; flex-direction: column; gap: 10px; padding: 16px; overflow-y: auto; }
-.card:fullscreen .fsbar .nm { font-size: 30px; }
-.card:fullscreen .fsbar .long { color: var(--dim); font-size: 14px; }
-.card:fullscreen .fsbar .ds { align-self: flex-start; }
-.card:fullscreen .fsbar .how { margin: 0; color: var(--dim); font-size: 14px; }
-.card .fs-controls { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; border-top: 1px solid var(--line); padding-top: 14px; }
-.card .fs-controls label { display: flex; align-items: center; gap: 8px; }
-.card .fs-controls input[type=range] { flex: 1; }
-.card:fullscreen .ov.top { left: 8px; }
+.card .fsbar { display: none; }
+.card .fsbar label { display: flex; align-items: center; gap: 8px; }
+.card .fsbar input[type=range] { flex: 1; }
+/* full screen: the map on the left; the info and the race controls (copied from the top bar) on the right */
+.card:fullscreen { grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto 1fr; border-radius: 0; border: 0; background: var(--panel); }
+.card:fullscreen .cv { grid-column: 1; grid-row: 1 / 3; height: auto; aspect-ratio: auto; }
+.card:fullscreen .info { grid-column: 2; grid-row: 1; padding: 16px 16px 0; overflow: visible; }
+.card:fullscreen .info .big { margin-top: 8px; }
+.card:fullscreen .fsbar { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; gap: 10px; padding: 16px; overflow-y: auto; }
 
 /* Leaflet sits under the canvas; in real-map mode Leaflet gets the mouse and the canvas only draws on top */
 .lf { position: absolute; inset: 0; z-index: 0; }

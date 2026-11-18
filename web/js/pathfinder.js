@@ -185,31 +185,28 @@
       el.className = 'card';
       el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas>
           <div class="map-tools">
-            <button class="fsonly z-in" title="Zoom in">+</button><button class="fsonly z-out" title="Zoom out">−</button>
+            <button class="z-in" title="Zoom in">+</button><button class="z-out" title="Zoom out">−</button>
             <button class="z-fit" title="Reset this map's view (only this map)">⟲</button>
-            <button class="fs" title="Full screen">⛶</button>
-          </div>
-          <div class="ov top" title="${algo.how}"><span class="nm" style="color:${algo.css}">${algo.name}</span><span class="ds">${algo.ds}</span></div>
-          <div class="ov bot">
-            <div class="big"><span>Cells expanded</span><b>0</b></div>
-            <div class="state"></div>
-            <dl class="res" hidden></dl>
-            <div class="badges"></div>
+            <button class="fs" title="Fit to screen (full screen)">⛶</button>
           </div>
         </div>
-        <aside class="fsbar">
-          <div class="nm" style="color:${algo.css}">${algo.name}</div>
+        <div class="info">
+          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span></div>
           <div class="long">${algo.long}</div>
           <span class="ds">${algo.ds}</span>
           <p class="how">${algo.how}</p>
-          <div class="fs-controls">
-            <button class="go f-play">⏸ Pause</button>
-            <button class="f-step">Step</button>
-            <button class="f-reset">↺ Restart race</button>
-            <label>Speed <input type="range" class="f-speed" min="-1.5" max="1.5" step="0.05" value="0"> <b class="f-speed-v">1×</b></label>
-            <div class="view-toggle" data-for="racefs"><button data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
-            <button class="f-exit">Exit full screen</button>
-          </div>
+          <div class="big"><span>Cells expanded</span><b>0</b></div>
+          <div class="state"></div>
+          <dl class="res" hidden></dl>
+          <div class="badges"></div>
+        </div>
+        <aside class="fsbar">
+          <button class="go f-play">⏸ Pause</button>
+          <button class="f-step">Step</button>
+          <button class="f-reset">↺ Restart race</button>
+          <label>Speed <input type="range" class="f-speed" min="-1.5" max="1.5" step="0.05" value="0"> <b class="f-speed-v">1×</b></label>
+          <div class="view-toggle" data-for="racefs"><button data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
+          <button class="f-exit">Exit full screen</button>
         </aside>`;
       cards.appendChild(el);
       const over = document.createElement('canvas');
