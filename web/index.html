@@ -38,7 +38,7 @@
   <section id="pf-setup" class="split">
     <div class="map-box"><div class="lf" id="pf-lf" hidden></div><canvas id="pf-map"></canvas>
       <div class="map-tools">
-        <button id="pf-zoom-in" title="Zoom in">+</button><button id="pf-zoom-out" title="Zoom out">−</button><button id="pf-fit" title="Fit the map">⤢</button>
+        <button id="pf-zoom-in" title="Zoom in">+</button><button id="pf-zoom-out" title="Zoom out">−</button><button id="pf-fit" title="Reset the view">⟲</button>
       </div>
       <div class="hover" id="pf-hover"></div>
     </div>
@@ -71,9 +71,8 @@
       <button class="go" id="race-play">⏸ Pause</button>
       <button id="race-step" title="Every search expands exactly one cell">Step</button>
       <label>Speed <input type="range" id="race-speed" min="-1.5" max="1.5" step="0.05" value="0"> <b id="race-speed-v">1×</b></label>
-      <button id="race-reset">↺ Reset</button>
+      <button id="race-reset" title="Start the race again (every map)">↺ Restart race</button>
       <button id="race-edit">✎ Edit map</button>
-      <span class="grp"><button id="race-zoom-in" title="Zoom in (all four maps)">+</button><button id="race-zoom-out" title="Zoom out">−</button><button id="race-fit" title="Fit the map">⤢</button></span>
       <div class="view-toggle" data-for="race"><button class="active" data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
     </div>
     <div class="banner box" id="race-banner">Ready.</div>
@@ -86,7 +85,7 @@
   <section class="split">
     <div class="map-box"><div class="lf" id="sim-lf" hidden></div><canvas id="sim-map"></canvas>
       <div class="map-tools">
-        <button id="sim-zoom-in" title="Zoom in">+</button><button id="sim-zoom-out" title="Zoom out">−</button><button id="sim-fit" title="Fit the map">⤢</button>
+        <button id="sim-zoom-in" title="Zoom in">+</button><button id="sim-zoom-out" title="Zoom out">−</button><button id="sim-fit" title="Reset the view">⟲</button>
       </div>
       <div class="hover" id="sim-hover"></div>
     </div>

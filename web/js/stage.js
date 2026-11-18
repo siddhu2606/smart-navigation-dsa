@@ -64,7 +64,7 @@
   stage.Surface = class {
     constructor(cv, lfDiv) {
       this.cv = cv; this.div = lfDiv;
-      this.cam = new SN.Camera(); this.lf = null; this.map = null; this.size = ''; this.needsFit = false;
+      this.cam = new SN.Camera(); this.focus = null; this.lf = null; this.map = null; this.size = ''; this.needsFit = false;
     }
 
     // Call whenever the map (or the mode) changes.
@@ -78,7 +78,7 @@
       } else {
         box.classList.remove('real');
         this.destroyLeaflet();
-        this.cam.fit(map.W, map.H);
+        this.cam.fit(map.W, map.H, this.focusPts());
       }
     }
 
@@ -91,16 +91,25 @@
       this.needsFit = true;
     }
 
-    // Show the grid so that the view is always INSIDE it: there is no empty margin where nothing can be placed,
-    // and you cannot pan or zoom out past the edge of the grid.
+    // focus = cells (e.g. start and goal) that should be in view when the map is reset
+    focusPts() { const W = this.map.W; return this.focus ? this.focus.map((c) => [c % W, (c / W) | 0]) : null; }
+
+    // Show the grid so that the view is always INSIDE it (no empty margin). With a focus the view starts centred on those cells.
+    // 
     fit() {
       if (!this.lf || this.div.clientWidth < 10 || this.div.clientHeight < 10) return;
-      const b = this.map.bbox, bounds = L.latLngBounds([b.s, b.w], [b.n, b.e]);
+      const m = this.map, b = m.bbox, bounds = L.latLngBounds([b.s, b.w], [b.n, b.e]);
       this.lf.invalidateSize(false);
-      const z = Math.ceil(this.lf.getBoundsZoom(bounds, true) * 4) / 4;      // smallest zoom where the view fits in the grid
-      this.lf.setMinZoom(z);
+      const cover = Math.ceil(this.lf.getBoundsZoom(bounds, true) * 4) / 4;   // smallest zoom where the view fits in the grid
+      let z = cover, centre = bounds.getCenter(), lo = cover;
+      if (this.focus) {
+        const ll = this.focus.map((c) => L.latLng(b.n - ((c / m.W | 0) + 0.5) / m.H * (b.n - b.s), b.w + ((c % m.W) + 0.5) / m.W * (b.e - b.w)));
+        const fb = L.latLngBounds(ll);
+        centre = fb.getCenter();
+      }
+      this.lf.setMinZoom(lo);
       this.lf.setMaxBounds(bounds);
-      this.lf.setView(bounds.getCenter(), z, { animate: false });
+      this.lf.setView(centre, z, { animate: false });
       this.needsFit = false;
     }
 
@@ -114,7 +123,7 @@
       if (this.lf) this.lf.setZoom(this.lf.getZoom() + Math.log2(factor), { animate: false });
       else this.cam.zoomBy(factor, this.cv.width, this.cv.height);
     }
-    home() { if (this.lf) this.fit(); else this.cam.fit(this.map.W, this.map.H); }
+    home() { if (this.lf) this.fit(); else this.cam.fit(this.map.W, this.map.H, this.focusPts()); }
 
     // Mouse wheel (and, if shouldPan is given, drag) on the canvas move our own camera (the town).
     // Leaflet does it itself in real mode.

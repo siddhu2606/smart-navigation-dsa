@@ -178,24 +178,39 @@
     const W = PF.size, cards = $('race-cards');
     closeRace();
     cards.innerHTML = '';
-    PF.cam.fit(W, W);
     const race = { cards: [], playing: true, speed: 1, acc: 0, firstDone: false, allDone: false };
     for (const algo of SN.ALGOS) {
       const res = SN.engine.search(algo.id, PF.cost, W, W, PF.start, PF.goal);   // run ONCE in C++, replay below
       const el = document.createElement('div');
       el.className = 'card';
       el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas>
-          <div class="map-tools"><button class="z-in" title="Zoom in">+</button><button class="z-out" title="Zoom out">−</button><button class="z-fit" title="Reset this map's view">⤢</button></div></div>
-        <div class="info">
-          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span><button class="fs" title="Full screen">⛶</button></div>
+          <div class="map-tools">
+            <button class="fsonly z-in" title="Zoom in">+</button><button class="fsonly z-out" title="Zoom out">−</button>
+            <button class="z-fit" title="Reset this map's view (only this map)">⟲</button>
+            <button class="fs" title="Full screen">⛶</button>
+          </div>
+          <div class="ov top" title="${algo.how}"><span class="nm" style="color:${algo.css}">${algo.name}</span><span class="ds">${algo.ds}</span></div>
+          <div class="ov bot">
+            <div class="big"><span>Cells expanded</span><b>0</b></div>
+            <div class="state"></div>
+            <dl class="res" hidden></dl>
+            <div class="badges"></div>
+          </div>
+        </div>
+        <aside class="fsbar">
+          <div class="nm" style="color:${algo.css}">${algo.name}</div>
           <div class="long">${algo.long}</div>
           <span class="ds">${algo.ds}</span>
           <p class="how">${algo.how}</p>
-          <div class="big"><span>Cells expanded</span><b>0</b></div>
-          <div class="state"></div>
-          <dl class="res" hidden></dl>
-          <div class="badges"></div>
-        </div>`;
+          <div class="fs-controls">
+            <button class="go f-play">⏸ Pause</button>
+            <button class="f-step">Step</button>
+            <button class="f-reset">↺ Restart race</button>
+            <label>Speed <input type="range" class="f-speed" min="-1.5" max="1.5" step="0.05" value="0"> <b class="f-speed-v">1×</b></label>
+            <div class="view-toggle" data-for="racefs"><button data-mode="physical">Physical</button><button data-mode="logical">Logical</button></div>
+            <button class="f-exit">Exit full screen</button>
+          </div>
+        </aside>`;
       cards.appendChild(el);
       const over = document.createElement('canvas');
       over.width = W; over.height = W;
@@ -204,23 +219,34 @@
       res.order.forEach((c, i) => { if (first[c] < 0) first[c] = i; });
       const card = { algo, res, el, first, cv: el.querySelector('canvas'), over, octx: over.getContext('2d'), img: null, dirty: null,
         cursor: 0, done: false, finishRank: 0, badges: '', html: '',
-        num: el.querySelector('.big b'), state: el.querySelector('.state'), resBox: el.querySelector('.res'), badgeBox: el.querySelector('.badges') };
-      card.surf = new SN.stage.Surface(card.cv, el.querySelector('.lf'));
-      card.surf.cam = PF.cam;                                  // the four maps share one camera
+        play: el.querySelector('.f-play'), num: el.querySelector('.big b'), state: el.querySelector('.state'), resBox: el.querySelector('.res'), badgeBox: el.querySelector('.badges') };
+      card.surf = new SN.stage.Surface(card.cv, el.querySelector('.lf'));     // every map has its own camera
+      card.surf.focus = [PF.start, PF.goal];                   // reset shows the start and the goal
       card.surf.attach(PF.map);
       card.surf.bindCamera((e) => e.button === 0 || e.button === 1 || e.button === 2);
       const q = (k) => el.querySelector(k);
       q('.z-in').addEventListener('click', () => card.surf.zoom(1.4));
       q('.z-out').addEventListener('click', () => card.surf.zoom(0.7));
       q('.z-fit').addEventListener('click', () => card.surf.home());
-      q('.fs').addEventListener('click', () => {
-        if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen && el.requestFullscreen();
+      const toggleFs = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen(); };
+      q('.fs').addEventListener('click', toggleFs);
+      q('.f-exit').addEventListener('click', toggleFs);
+      q('.f-play').addEventListener('click', () => $('race-play').click());
+      q('.f-step').addEventListener('click', () => $('race-step').click());
+      q('.f-reset').addEventListener('click', () => $('race-reset').click());
+      q('.f-speed').addEventListener('input', (e) => {
+        $('race-speed').value = e.target.value;
+        $('race-speed').dispatchEvent(new Event('input'));
+        race.cards.forEach((o) => { o.el.querySelector('.f-speed').value = e.target.value; o.el.querySelector('.f-speed-v').textContent = $('race-speed-v').textContent; });
       });
-      el.addEventListener('fullscreenchange', () => setTimeout(() => { if (card.surf.lf) { card.surf.lf.invalidateSize(false); } }, 100));
+      el.addEventListener('fullscreenchange', () => {      // entering or leaving full screen: the map gets a new size, so show it from the start again
+        q('.f-speed').value = $('race-speed').value; q('.f-speed-v').textContent = $('race-speed-v').textContent;
+        setTimeout(() => card.surf.home(), 120);
+      });
       race.cards.push(card);
     }
     PF.race = race;
-    SN.stage.syncGroup(race.cards.map((c) => c.surf));         // real map: the four Leaflet maps move together
+    setViewMode(PF.mode);
     resetRace();
     $('pf-setup').hidden = true;
     $('pf-race').hidden = false;
@@ -297,7 +323,8 @@
       race.acc -= n;
       while (n-- > 0 && !race.allDone) stepOnce();
     }
-    for (const c of race.cards) drawCard(c, now);
+    const label = $('race-play').textContent;
+    for (const c of race.cards) { if (c.play.textContent !== label) c.play.textContent = label; drawCard(c, now); }
   }
 
   function drawCard(c, now) {
@@ -337,8 +364,6 @@
     c.badgeBox.innerHTML = c.badges;
   }
 
-  function leaderSurface() { return PF.race && PF.race.cards[0].surf; }
-
   function bindRace() {
     $('race-play').addEventListener('click', () => {
       const r = PF.race;
@@ -362,22 +387,21 @@
       $('pf-race').hidden = true;
       $('pf-setup').hidden = false;
     });
-    $('race-zoom-in').addEventListener('click', () => leaderSurface().zoom(1.4));
-    $('race-zoom-out').addEventListener('click', () => leaderSurface().zoom(0.7));
-    $('race-fit').addEventListener('click', () => {
-      if (SN.stage.real) PF.race.cards.forEach((c) => c.surf.home()); else PF.cam.fit(PF.size, PF.size);
-    });
+  }
+
+  function setViewMode(mode) {
+    PF.mode = mode;
+    document.querySelectorAll('.view-toggle[data-for=pf] button, .view-toggle[data-for=race] button, .view-toggle[data-for=racefs] button')
+      .forEach((x) => x.classList.toggle('active', x.dataset.mode === mode));
   }
 
   function bindViewToggles() {
     document.querySelectorAll('.view-toggle[data-for=pf], .view-toggle[data-for=race]').forEach((group) => {
-      group.addEventListener('click', (e) => {
-        const b = e.target.closest('button');
-        if (!b) return;
-        PF.mode = b.dataset.mode;
-        document.querySelectorAll('.view-toggle[data-for=pf] button, .view-toggle[data-for=race] button')
-          .forEach((x) => x.classList.toggle('active', x.dataset.mode === PF.mode));
-      });
+      group.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setViewMode(b.dataset.mode); });
+    });
+    $('race-cards').addEventListener('click', (e) => {          // the toggle inside a full-screen card
+      const b = e.target.closest('.view-toggle[data-for=racefs] button');
+      if (b) setViewMode(b.dataset.mode);
     });
   }
 
