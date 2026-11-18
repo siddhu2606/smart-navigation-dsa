@@ -132,6 +132,7 @@
     $('pf-zoom-in').addEventListener('click', () => PF.setup.zoom(1.4));
     $('pf-zoom-out').addEventListener('click', () => PF.setup.zoom(0.7));
     $('pf-fit').addEventListener('click', () => PF.setup.home());
+    $('pf-all').addEventListener('click', () => PF.setup.fitAll());
 
     const sw = (t, label) => { const c = SN.OVERVIEW_RGB[t]; return `<span><i style="background:rgb(${c})"></i>${label} <b>${SN.COST[t] || '✕'}</b></span>`; };
     $('pf-legend').innerHTML = [sw(T.ROAD, 'Road'), sw(T.PATH, 'Footpath'), sw(T.GRASS, 'Grass'), sw(T.FOREST, 'Forest'),
@@ -185,14 +186,12 @@
       el.className = 'card';
       el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas>
           <div class="map-tools">
-            <button class="z-in" title="Zoom in">+</button><button class="z-out" title="Zoom out">−</button>
             <button class="z-fit" title="Reset this map's view (only this map)">⟲</button>
             <button class="z-all" title="Fit the whole map to view (only this map)">⤢</button>
-            <button class="fs" title="Fit to screen (full screen)">⛶</button>
           </div>
         </div>
         <div class="info">
-          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span></div>
+          <div class="top"><span class="nm" style="color:${algo.css}">${algo.name}</span><button class="fs" title="Full screen">⛶</button></div>
           <div class="long">${algo.long}</div>
           <span class="ds">${algo.ds}</span>
           <p class="how">${algo.how}</p>
@@ -202,6 +201,10 @@
           <div class="badges"></div>
         </div>
         <aside class="fsbar">
+          <div class="f-map"><span>Map</span>
+            <button class="f-zin" title="Zoom in">+</button><button class="f-zout" title="Zoom out">−</button>
+            <button class="f-fit" title="Reset this map's view">⟲</button><button class="f-all" title="Fit the whole map to view">⤢</button>
+          </div>
           <button class="go f-play">⏸ Pause</button>
           <button class="f-step">Step</button>
           <button class="f-reset">↺ Restart race</button>
@@ -223,8 +226,10 @@
       card.surf.attach(PF.map);
       card.surf.bindCamera((e) => e.button === 0 || e.button === 1 || e.button === 2);
       const q = (k) => el.querySelector(k);
-      q('.z-in').addEventListener('click', () => card.surf.zoom(1.4));
-      q('.z-out').addEventListener('click', () => card.surf.zoom(0.7));
+      q('.f-zin').addEventListener('click', () => card.surf.zoom(1.4));
+      q('.f-zout').addEventListener('click', () => card.surf.zoom(0.7));
+      q('.f-fit').addEventListener('click', () => card.surf.home());
+      q('.f-all').addEventListener('click', () => card.surf.fitAll());
       q('.z-fit').addEventListener('click', () => card.surf.home());
       q('.z-all').addEventListener('click', () => card.surf.fitAll());
       const toggleFs = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen(); };

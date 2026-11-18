@@ -343,6 +343,7 @@
     $('sim-zoom-in').addEventListener('click', () => S.surf.zoom(1.4));
     $('sim-zoom-out').addEventListener('click', () => S.surf.zoom(0.7));
     $('sim-fit').addEventListener('click', () => S.surf.home());
+    $('sim-all').addEventListener('click', () => S.surf.fitAll());
   }
 
   // real-map mode: Leaflet owns the mouse
