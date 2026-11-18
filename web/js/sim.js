@@ -67,37 +67,11 @@
     updatePanel();
   }
 
-  // The cells everybody has walked (or driven) through, so the page can draw the routes that were followed.
-  function addTrails(first) {
-    const add = (list, i, cell) => { const t = list[i] || (list[i] = []); if (t[t.length - 1] !== cell) { t.push(cell); if (t.length > 800) t.shift(); } };
-    if (first) { S.trails = []; S.atrails = []; }
-    for (let i = 0; i < S.cur.length / 6; i++) add(S.trails, i, S.cur[i * 6]);
-    for (let i = 0; i < S.amb.length / 3; i++) add(S.atrails, i, S.amb[i * 3]);
-  }
-
-  function drawTrails(ctx, v) {
-    ctx.save();
-    ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, Math.min(4, v.s * 0.3));
-    ctx.setLineDash([7, 6]);
-    const line = (t) => {
-      if (t.length < 2) return;
-      ctx.beginPath();
-      for (let k = 0; k < t.length; k++) { const [x, y] = R.cellCenter(v, t[k]); if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
-      ctx.stroke();
-    };
-    ctx.globalAlpha = 0.8;
-    S.trails.forEach((t, i) => { ctx.strokeStyle = K[S.cur[i * 6 + 1]].color; line(t); });
-    ctx.strokeStyle = '#e03030'; ctx.globalAlpha = 0.5;
-    S.atrails.forEach(line);
-    ctx.restore();
-  }
-
   function readState(first) {
     S.prev = first ? SN.engine.simPeople() : S.cur;
     S.ambPrev = first ? SN.engine.simAmbulances() : S.amb;
     S.cur = SN.engine.simPeople();
     S.amb = SN.engine.simAmbulances();
-    addTrails(first);
     S.queue = SN.engine.simQueue();
     S.metrics = SN.engine.simMetrics();
   }
@@ -188,7 +162,7 @@
       ? `Finished after ${m.ticks} ticks: <b>${m.safe}</b> safe, <b>${m.lost}</b> lost, <b>${m.stranded}</b> stranded (no bed or no road). Press <b>Reset</b> for a new crowd.`
       : S.phase === 'ready'
         ? 'Click anywhere on the map to place the fire, then press <b>Start</b>. Only people near it are evacuated.'
-        : 'Dashed lines are the routes taken so far: people in their group colour, ambulances in red. A ! means waiting for an ambulance.';
+        : 'People with a ! are waiting for an ambulance.';
   }
 
   // ------------------------------------------------------------------ comparing the two policies
@@ -292,7 +266,6 @@
       ctx.beginPath(); ctx.arc(fx, fy, pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
 
-    drawTrails(ctx, v);
     R.drawFlag(ctx, v, S.depot, '#e03030', '+');
     for (const c of S.shelterCells) R.drawFlag(ctx, v, c, '#48b060', 'S');
 
