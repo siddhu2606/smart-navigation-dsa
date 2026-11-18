@@ -186,7 +186,7 @@
       el.className = 'card';
       el.innerHTML = `<div class="cv"><div class="lf" hidden></div><canvas></canvas>
           <div class="map-tools">
-            <button class="z-fit" title="Reset this map's view (only this map)">⟲</button>
+            <button class="z-fit" title="Reset this map: search again from the start and show the map from the start (only this map)">⟲</button>
             <button class="z-all" title="Fit the whole map to view (only this map)">⤢</button>
           </div>
         </div>
@@ -203,7 +203,7 @@
         <aside class="fsbar">
           <div class="f-map"><span>Map</span>
             <button class="f-zin" title="Zoom in">+</button><button class="f-zout" title="Zoom out">−</button>
-            <button class="f-fit" title="Reset this map's view">⟲</button><button class="f-all" title="Fit the whole map to view">⤢</button>
+            <button class="f-fit" title="Reset this map (search again from the start)">⟲</button><button class="f-all" title="Fit the whole map to view">⤢</button>
           </div>
           <button class="go f-play">⏸ Pause</button>
           <button class="f-step">Step</button>
@@ -228,9 +228,9 @@
       const q = (k) => el.querySelector(k);
       q('.f-zin').addEventListener('click', () => card.surf.zoom(1.4));
       q('.f-zout').addEventListener('click', () => card.surf.zoom(0.7));
-      q('.f-fit').addEventListener('click', () => card.surf.home());
+      q('.f-fit').addEventListener('click', () => restartCard(card));
       q('.f-all').addEventListener('click', () => card.surf.fitAll());
-      q('.z-fit').addEventListener('click', () => card.surf.home());
+      q('.z-fit').addEventListener('click', () => restartCard(card));
       q('.z-all').addEventListener('click', () => card.surf.fitAll());
       const toggleFs = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen(); };
       q('.fs').addEventListener('click', toggleFs);
@@ -260,18 +260,28 @@
     if (PF.race) for (const c of PF.race.cards) c.surf.destroyLeaflet();
   }
 
+  // Start one card's search again from the beginning (the other cards carry on) and show its map from the start.
+  function restartCard(c) {
+    const race = PF.race;
+    if (c.done) race.finished--;
+    c.cursor = 0; c.done = false; c.finishRank = 0; c.badges = ''; c.html = '';
+    c.octx.clearRect(0, 0, PF.size, PF.size);
+    c.img = c.octx.createImageData(PF.size, PF.size);
+    c.dirty = null;
+    c.el.classList.remove('finished');
+    c.resBox.hidden = true;
+    c.badgeBox.innerHTML = '';
+    c.surf.home();
+    race.allDone = false;
+    if (!race.playing) { race.playing = true; $('race-play').textContent = '⏸ Pause'; }
+    banner(`${c.algo.name} was reset and is searching again.`, false);
+  }
+
   function resetRace() {
     const race = PF.race;
     race.playing = true; race.acc = 0; race.firstDone = false; race.allDone = false; race.finished = 0;
     $('race-play').textContent = '⏸ Pause';
-    for (const c of race.cards) {
-      c.cursor = 0; c.done = false; c.finishRank = 0; c.badges = ''; c.html = '';
-      c.octx.clearRect(0, 0, PF.size, PF.size);
-      c.img = c.octx.createImageData(PF.size, PF.size);
-      c.dirty = null;
-      c.el.classList.remove('finished');
-      c.resBox.hidden = true;
-    }
+    for (const c of race.cards) { c.done = false; restartCard(c); }
     banner('Race started. Every algorithm expands one cell per step, all at the same speed.', false);
   }
 
@@ -293,9 +303,9 @@
       c.dirty = c.dirty ? { x0: Math.min(c.dirty.x0, x), y0: Math.min(c.dirty.y0, y), x1: Math.max(c.dirty.x1, x), y1: Math.max(c.dirty.y1, y) } : { x0: x, y0: y, x1: x, y1: y };
       if (c.cursor >= c.res.order.length) {
         c.done = true;
-        c.finishRank = ++race.finished;
+        c.finishRank = Math.max(0, ...race.cards.map((o) => o.finishRank)) + 1; race.finished++;
         c.el.classList.add('finished');
-        if (c.finishRank === 1) banner(`${c.algo.name} reached the goal first, after ${c.cursor} expansions. The others are still searching.`, true);
+        if (race.cards.every((o) => o === c || !o.done)) banner(`${c.algo.name} reached the goal first, after ${c.cursor} expansions. The others are still searching.`, true);
       }
     }
     if (race.finished === race.cards.length && !race.allDone) finishRace();
@@ -307,14 +317,15 @@
     race.allDone = true;
     const cheapest = Math.min(...race.cards.map((c) => c.res.cost));
     const fewest = Math.min(...race.cards.map((c) => c.res.path.length));
+    const top = Math.min(...race.cards.map((c) => c.finishRank));
     const best = race.cards.filter((c) => c.res.cost === cheapest);
     const short = race.cards.filter((c) => c.res.path.length === fewest);
     for (const c of race.cards) {
       c.badges = '';
-      if (c.finishRank === 1) c.badges += '<span class="badge first">FIRST TO FINISH</span>';
+      if (c.finishRank === top) c.badges += '<span class="badge first">FIRST TO FINISH</span>';
       if (c.res.cost === cheapest) c.badges += '<span class="badge best">CHEAPEST ROUTE</span>';
     }
-    const first = race.cards.find((c) => c.finishRank === 1);
+    const first = race.cards.find((c) => c.finishRank === top);
     banner(`Finished. First to finish: ${first.algo.name}. Cheapest route (cost ${cheapest}): ${best.map((c) => c.algo.name).join(' and ')}. ` +
       `Fewest steps (${fewest - 1}): ${short.map((c) => c.algo.name).join(' and ')}.`, true);
   }

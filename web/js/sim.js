@@ -342,7 +342,7 @@
     cv.addEventListener('pointerleave', () => { $('sim-hover').textContent = ''; });
     $('sim-zoom-in').addEventListener('click', () => S.surf.zoom(1.4));
     $('sim-zoom-out').addEventListener('click', () => S.surf.zoom(0.7));
-    $('sim-fit').addEventListener('click', () => S.surf.home());
+    $('sim-fit').addEventListener('click', () => { S.surf.home(); rebuild(); });   // start the same incident again, view from the start
     $('sim-all').addEventListener('click', () => S.surf.fitAll());
   }
 
