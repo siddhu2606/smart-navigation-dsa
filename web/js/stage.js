@@ -64,7 +64,7 @@
   stage.Surface = class {
     constructor(cv, lfDiv) {
       this.cv = cv; this.div = lfDiv;
-      this.cam = new SN.Camera(); this.focus = null; this.lf = null; this.map = null; this.size = ''; this.needsFit = false;
+      this.cam = new SN.Camera(); this.focus = null; this.contain = false; this.lf = null; this.map = null; this.size = ''; this.needsFit = false;
     }
 
     // Call whenever the map (or the mode) changes.
@@ -79,6 +79,7 @@
         box.classList.remove('real');
         this.destroyLeaflet();
         this.cam.fit(map.W, map.H, this.focusPts());
+        if (this.contain) this.cam.fitAll(map.W, map.H);
       }
     }
 
@@ -97,6 +98,7 @@
     // Show the grid so that the view is always INSIDE it (no empty margin). With a focus the view starts centred on those cells.
     // 
     fit() {
+      if (this.contain) { this.fitAll(); return; }
       if (!this.lf || this.div.clientWidth < 10 || this.div.clientHeight < 10) return;
       const m = this.map, b = m.bbox, bounds = L.latLngBounds([b.s, b.w], [b.n, b.e]);
       this.lf.invalidateSize(false);
@@ -121,6 +123,7 @@
       const z = Math.floor(this.lf.getBoundsZoom(bounds, false) * 4) / 4;
       this.lf.setMinZoom(z);
       this.lf.setView(bounds.getCenter(), z, { animate: false });
+      this.needsFit = false;
     }
 
     destroyLeaflet() {
@@ -133,7 +136,7 @@
       if (this.lf) this.lf.setZoom(this.lf.getZoom() + Math.log2(factor), { animate: false });
       else this.cam.zoomBy(factor, this.cv.width, this.cv.height);
     }
-    home() { if (this.lf) this.fit(); else this.cam.fit(this.map.W, this.map.H, this.focusPts()); }
+    home() { if (this.contain) { this.fitAll(); return; } if (this.lf) this.fit(); else this.cam.fit(this.map.W, this.map.H, this.focusPts()); }
 
     // Mouse wheel (and, if shouldPan is given, drag) on the canvas move our own camera (the town).
     // Leaflet does it itself in real mode.

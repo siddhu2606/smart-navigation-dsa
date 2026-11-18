@@ -24,7 +24,8 @@
       ctx.drawImage(world.over.canvas, v.ox, v.oy, v.W * v.s, v.H * v.s);
       return;
     }
-    ctx.fillStyle = '#0e1a14';
+    const g = SN.OVERVIEW_RGB[SN.T.GRASS];                 // outside the map (whole-map view in a wide panel): ground colour, not black
+    ctx.fillStyle = mode === 'physical' ? `rgb(${g[0]},${g[1]},${g[2]})` : '#0e1a14';
     ctx.fillRect(0, 0, v.cw, v.ch);
     ctx.imageSmoothingEnabled = false;
     if (mode === 'physical' && v.s >= TILE_MIN) {

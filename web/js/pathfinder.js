@@ -99,11 +99,14 @@
     const view = () => PF.setup.view();
     // wheel zooms; drag pans (Pan tool, or any button other than the left one)
     PF.setup.bindCamera((e) => PF.tool === 'pan' || e.button !== 0);
+    // Start / Goal: a click places the flag, a drag pans the map. Wall / Erase: a drag paints.
+    let press = null;
     cv.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       cv.setPointerCapture(e.pointerId);
-      PF.painting = true;
       const v = view();
+      if (PF.tool === 'start' || PF.tool === 'goal') { press = { x: e.clientX, y: e.clientY, moved: false }; return; }
+      PF.painting = true;
       if (v) applyTool(R.cellAt(cv, v, e));
     });
     cv.addEventListener('pointermove', (e) => {
@@ -111,9 +114,25 @@
       if (!v) return;
       const cell = R.cellAt(cv, v, e);
       $('pf-hover').textContent = hoverText(cell);
+      if (press) {
+        const dx = e.clientX - press.x, dy = e.clientY - press.y;
+        if (!press.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+        press.moved = true;
+        const dpr = cv.width / cv.getBoundingClientRect().width;
+        PF.setup.cam.panBy(dx * dpr, dy * dpr, v.s);
+        press.x = e.clientX; press.y = e.clientY;
+        return;
+      }
       if (PF.painting) applyTool(cell);
     });
-    const end = () => { if (PF.painting) { PF.painting = false; check(); } };
+    const end = (e) => {
+      if (press) {
+        if (!press.moved && e.type === 'pointerup') { const v = view(); if (v) applyTool(R.cellAt(cv, v, e)); check(); }
+        press = null;
+        return;
+      }
+      if (PF.painting) { PF.painting = false; check(); }
+    };
     cv.addEventListener('pointerup', end);
     cv.addEventListener('pointercancel', end);
     cv.addEventListener('pointerleave', () => { $('pf-hover').textContent = ''; });
@@ -222,7 +241,7 @@
         cursor: 0, done: false, finishRank: 0, badges: '', html: '',
         play: el.querySelector('.f-play'), num: el.querySelector('.big b'), state: el.querySelector('.state'), resBox: el.querySelector('.res'), badgeBox: el.querySelector('.badges') };
       card.surf = new SN.stage.Surface(card.cv, el.querySelector('.lf'));     // every map has its own camera
-      card.surf.focus = [PF.start, PF.goal];                   // reset shows the start and the goal
+      card.surf.contain = true;                                // a race map always shows the whole map (also in full screen)
       card.surf.attach(PF.map);
       card.surf.bindCamera((e) => e.button === 0 || e.button === 1 || e.button === 2);
       const q = (k) => el.querySelector(k);
