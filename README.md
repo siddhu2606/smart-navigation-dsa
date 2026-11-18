@@ -12,6 +12,8 @@ to WebAssembly so the same code runs in the browser. The page only draws what th
 
 **Live demo:** https://siddhu2606.github.io/smart-navigation-dsa/
 
+**Architecture:** see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Where to read the code
 
 Everything an examiner will ask about is in `backend/`, one small file per idea.
